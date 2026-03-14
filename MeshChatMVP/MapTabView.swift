@@ -18,6 +18,7 @@ struct MapTabView: View {
     @State private var showOfflineInfo = false
     @State private var isCaching = false
     @State private var showAddLabelSheet = false
+    @State private var showCooldownAlert = false
     @State private var selectedLabel: MapLabelRecord?
 
     /// Labels built from mesh.mapLabels + mesh.labelVotes for display and voting.
@@ -154,11 +155,21 @@ struct MapTabView: View {
                         .tint(.accentColor)
                         Spacer()
                         Button {
-                            showAddLabelSheet = true
+                            if mesh.mapLabelCooldownRemaining > 0 {
+                                showCooldownAlert = true
+                            } else {
+                                showAddLabelSheet = true
+                            }
                         } label: {
-                            Image(systemName: "mappin.circle.fill")
-                                .font(.body)
+                            if mesh.mapLabelCooldownRemaining > 0 {
+                                Text("\(Int(ceil(mesh.mapLabelCooldownRemaining)))s")
+                                    .font(.caption.monospacedDigit())
+                            } else {
+                                Image(systemName: "mappin.circle.fill")
+                                    .font(.body)
+                            }
                         }
+                        .disabled(mesh.mapLabelCooldownRemaining > 0)
                         Button {
                             showOfflineInfo = true
                         } label: {
@@ -175,6 +186,11 @@ struct MapTabView: View {
             }
             .navigationTitle("Map")
             .navigationBarTitleDisplayMode(.inline)
+            .alert("Label cooldown", isPresented: $showCooldownAlert) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text("Please wait \(Int(ceil(mesh.mapLabelCooldownRemaining))) seconds before placing another label.")
+            }
             .sheet(isPresented: $showOfflineInfo) {
                 OfflineMapSheet(isCaching: $isCaching, region: region, onCache: cacheCurrentRegion)
             }

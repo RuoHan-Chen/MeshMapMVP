@@ -6,6 +6,8 @@ enum MessageType: UInt8, Codable, CaseIterable {
     case message = 2
     case mapLabel = 3
     case mapLabelVote = 4
-    /// Chunked JPEG over mesh (envelope ≤512 B; same transferId). Raw 5 so it does not clash with map on wire.
-    case imageChunk = 5
+    /// Ask peers to flood their map labels (map branch wire value).
+    case requestMapLabels = 5
+    /// Chunked JPEG over mesh (raw 6 — does not clash with requestMapLabels).
+    case imageChunk = 6
 }
