@@ -1098,12 +1098,48 @@ final class BluetoothMeshService: NSObject, ObservableObject {
             p.name = name
             p.rssi = rssi
             p.linkState = linkState
-            if let k = pk { p.publicKey = k }
+            if let k = pk {
+                p.publicKey = k
+                // Same identity on another peripheral id → drop stale row (reconnect / duplicate discovery).
+                let staleIds = self.discoveredPeerById.filter { $0.key != id && $0.value.publicKey == k }.map(\.key)
+                for sid in staleIds { self.discoveredPeerById.removeValue(forKey: sid) }
+            }
             p.lastSeen = now
             self.discoveredPeerById[id] = p
-            self.discoveredPeers = self.discoveredPeerById.values.sorted {
-                $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
+            self.rebuildDiscoveredPeersList()
+        }
+    }
+
+    /// Prefer one dashboard row per Curve25519 identity; stronger link state wins on tie.
+    private func rebuildDiscoveredPeersList() {
+        func rank(_ s: String) -> Int {
+            switch s {
+            case "connected": return 5
+            case "connecting": return 4
+            case "discovered": return 3
+            case "disconnected": return 2
+            case "failed": return 1
+            default: return 0
             }
+        }
+        var byPub: [Data: DiscoveredPeer] = [:]
+        var noPub: [UUID: DiscoveredPeer] = [:]
+        for peer in discoveredPeerById.values {
+            if let k = peer.publicKey {
+                if let ex = byPub[k] {
+                    if rank(peer.linkState) > rank(ex.linkState) { byPub[k] = peer }
+                    else if rank(peer.linkState) == rank(ex.linkState), peer.lastSeen >= ex.lastSeen { byPub[k] = peer }
+                } else {
+                    byPub[k] = peer
+                }
+            } else {
+                noPub[peer.id] = peer
+            }
+        }
+        // Drop no-pub rows that duplicate a pubkey row’s peripheral (already merged above).
+        let merged = Array(byPub.values) + Array(noPub.values)
+        discoveredPeers = merged.sorted {
+            $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
         }
     }
 }

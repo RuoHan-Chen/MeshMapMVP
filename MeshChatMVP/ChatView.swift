@@ -12,6 +12,8 @@ struct ChatView: View {
     @State private var showPhotoSendInfo = false
     /// Non-nil while chunks are going out over BLE.
     @State private var imageSendPacketsTotal: Int?
+    /// Tap remote bubble → save contact (public key from mesh senderID).
+    @State private var contactEditPK: ContactPublicKeyItem?
 
     var body: some View {
         NavigationStack {
@@ -95,6 +97,14 @@ struct ChatView: View {
             }
             .sheet(isPresented: $showPhotoSendInfo) {
                 photoSendInfoSheet
+            }
+            .sheet(item: $contactEditPK) { item in
+                ContactEditorView(
+                    publicKey: item.publicKey,
+                    existing: try? DatabaseManager.shared.findContactByPublicKey(item.publicKey)
+                ) {
+                    mesh.contactsVersion = UUID()
+                }
             }
             .onChange(of: pickedItem) { newItem in
                 guard let newItem else { return }
@@ -210,7 +220,7 @@ struct ChatView: View {
                         .foregroundStyle(.secondary)
                 }
             }
-            Text("Photos: many small mesh packets (see ⓘ). Dashboard = link quality.")
+            Text("Photos: many small mesh packets (see ⓘ). Tap someone’s message to save them as a contact.")
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
         }
@@ -220,39 +230,61 @@ struct ChatView: View {
     }
 
     private func bubble(_ m: ChatMessage) -> some View {
-        HStack {
+        let pk = !m.isLocal ? KeyManager.decodePublicKeyBase64(m.senderID) : nil
+        let canSaveContact = pk != nil
+        return HStack {
             if m.isLocal { Spacer(minLength: 48) }
-            VStack(alignment: m.isLocal ? .trailing : .leading, spacing: 4) {
-                HStack(spacing: 6) {
-                    if !m.isLocal {
-                        Text(mesh.senderDisplayName(senderID: m.senderID, fallbackSenderName: m.senderName))
-                            .font(.caption.weight(.semibold))
+            Group {
+                if let pk {
+                    Button {
+                        contactEditPK = ContactPublicKeyItem(publicKey: pk)
+                    } label: {
+                        bubbleContent(m, canSaveContact: true)
                     }
-                    Text(m.date, style: .time).font(.caption2).foregroundStyle(.secondary)
-                    if m.isLocal { Text("You").font(.caption.weight(.semibold)) }
+                    .buttonStyle(.plain)
+                } else {
+                    bubbleContent(m, canSaveContact: false)
                 }
-                if !m.isLocal, let dist = m.distanceFromMe {
-                    Text(distanceString(dist)).font(.caption2).foregroundStyle(.secondary)
-                }
-                Group {
-                    if let b64 = m.imageJPEGBase64, let imgData = Data(base64Encoded: b64), let ui = UIImage(data: imgData) {
-                        Image(uiImage: ui)
-                            .resizable()
-                            .scaledToFit()
-                            .frame(maxWidth: 220, maxHeight: 220)
-                            .clipShape(RoundedRectangle(cornerRadius: 12))
-                    } else {
-                        Text(m.text)
-                            .font(.body)
-                    }
-                }
-                .padding(12)
-                .background(
-                    RoundedRectangle(cornerRadius: 16)
-                        .fill(m.isLocal ? Color.accentColor.opacity(0.2) : Color(.secondarySystemBackground))
-                )
             }
             if !m.isLocal { Spacer(minLength: 48) }
+        }
+    }
+
+    private func bubbleContent(_ m: ChatMessage, canSaveContact: Bool) -> some View {
+        VStack(alignment: m.isLocal ? .trailing : .leading, spacing: 4) {
+            HStack(spacing: 6) {
+                if !m.isLocal {
+                    Text(mesh.senderDisplayName(senderID: m.senderID, fallbackSenderName: m.senderName))
+                        .font(.caption.weight(.semibold))
+                    if canSaveContact {
+                        Image(systemName: "person.crop.circle.badge.plus")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                Text(m.date, style: .time).font(.caption2).foregroundStyle(.secondary)
+                if m.isLocal { Text("You").font(.caption.weight(.semibold)) }
+            }
+            if !m.isLocal, let dist = m.distanceFromMe {
+                Text(distanceString(dist)).font(.caption2).foregroundStyle(.secondary)
+            }
+            Group {
+                if let b64 = m.imageJPEGBase64, let imgData = Data(base64Encoded: b64), let ui = UIImage(data: imgData) {
+                    Image(uiImage: ui)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(maxWidth: 220, maxHeight: 220)
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                } else {
+                    Text(m.text)
+                        .font(.body)
+                }
+            }
+            .padding(12)
+            .background(
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(m.isLocal ? Color.accentColor.opacity(0.2) : Color(.secondarySystemBackground))
+            )
         }
     }
 
@@ -260,6 +292,12 @@ struct ChatView: View {
         if meters < 1000 { return "~\(Int(round(meters))) m away" }
         return String(format: "~%.1f km away", meters / 1000)
     }
+}
+
+/// Sheet identity for ContactEditorView (Data is not Identifiable).
+private struct ContactPublicKeyItem: Identifiable {
+    let id = UUID()
+    let publicKey: Data
 }
 
 #Preview {
