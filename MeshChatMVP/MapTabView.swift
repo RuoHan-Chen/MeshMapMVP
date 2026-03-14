@@ -17,6 +17,36 @@ struct MapTabView: View {
     )
     @State private var showOfflineInfo = false
     @State private var isCaching = false
+    @State private var showAddLabelSheet = false
+    @State private var selectedLabel: MapLabelRecord?
+
+    /// Labels built from mesh.mapLabels + mesh.labelVotes for display and voting.
+    private var labelRecords: [MapLabelRecord] {
+        mesh.mapLabels.map { id, payload in
+            let votes = mesh.labelVotes[id] ?? [:]
+            let upVotes = votes.values.filter { $0 == 1 }.count
+            let downVotes = votes.values.filter { $0 == -1 }.count
+            let category = LabelCategory(rawValue: payload.category) ?? .checkpoint
+            return MapLabelRecord(
+                id: id,
+                category: category,
+                latitude: payload.lat,
+                longitude: payload.lon,
+                senderID: payload.senderID,
+                senderName: payload.senderName,
+                date: Date(timeIntervalSince1970: Double(payload.timestamp) / 1000),
+                upVotes: upVotes,
+                downVotes: downVotes
+            )
+        }
+    }
+
+    /// Combined annotations: transmitters + labels (single list for Map).
+    private var combinedAnnotations: [MapAnnotationItem] {
+        let transmitterItems = annotationItems.map { MapAnnotationItem.transmitter($0) }
+        let labelItems = labelRecords.map { MapAnnotationItem.label($0) }
+        return transmitterItems + labelItems
+    }
 
     /// Pins to show: remote senders from senderCoordinates plus current user if sharing.
     private var annotationItems: [TransmitterPin] {
@@ -44,13 +74,13 @@ struct MapTabView: View {
     var body: some View {
         NavigationStack {
             ZStack(alignment: .top) {
-                if annotationItems.isEmpty {
+                if combinedAnnotations.isEmpty {
                     Map(coordinateRegion: $region)
                         .ignoresSafeArea(edges: .all)
                     VStack(spacing: 8) {
-                        Text("No transmitter positions yet")
+                        Text("No positions or labels yet")
                             .font(.headline)
-                        Text("Turn on \"Share location\" below. Positions appear when peers share coordinates.")
+                        Text("Turn on \"Share location\" to show your position. Tap \"Add label\" to place an incident label; others can vote on validity.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .multilineTextAlignment(.center)
@@ -58,24 +88,45 @@ struct MapTabView: View {
                     }
                     .padding(.top, 60)
                 } else {
-                    Map(coordinateRegion: $region, annotationItems: annotationItems) { item in
+                    Map(coordinateRegion: $region, annotationItems: combinedAnnotations) { item in
                         MapAnnotation(coordinate: item.coordinate) {
-                            VStack(spacing: 2) {
-                                Image(systemName: item.isCurrentUser ? "person.circle.fill" : "antenna.radiowaves.left.and.right")
-                                    .font(.title2)
-                                    .foregroundStyle(item.isCurrentUser ? .blue : .orange)
-                                Text(item.displayName)
-                                    .font(.caption2)
-                                    .lineLimit(1)
+                            switch item {
+                            case .transmitter(let p):
+                                VStack(spacing: 2) {
+                                    Image(systemName: p.isCurrentUser ? "person.circle.fill" : "antenna.radiowaves.left.and.right")
+                                        .font(.title2)
+                                        .foregroundStyle(p.isCurrentUser ? .blue : .orange)
+                                    Text(p.displayName)
+                                        .font(.caption2)
+                                        .lineLimit(1)
+                                }
+                                .padding(6)
+                                .background(.background, in: RoundedRectangle(cornerRadius: 8))
+                            case .label(let record):
+                                Button {
+                                    selectedLabel = record
+                                } label: {
+                                    VStack(spacing: 2) {
+                                        Image(systemName: record.category.systemImage)
+                                            .font(.title2)
+                                            .foregroundStyle(.red)
+                                        Text(record.category.displayName)
+                                            .font(.caption2)
+                                            .lineLimit(1)
+                                            .multilineTextAlignment(.center)
+                                    }
+                                    .padding(6)
+                                    .background(.background, in: RoundedRectangle(cornerRadius: 8))
+                                }
+                                .buttonStyle(.plain)
                             }
-                            .padding(6)
-                            .background(.background, in: RoundedRectangle(cornerRadius: 8))
                         }
                     }
                     .ignoresSafeArea(edges: .all)
                     .onAppear { fitRegionToAnnotations() }
                     .onChange(of: mesh.senderCoordinates.count) { _ in fitRegionToAnnotations() }
                     .onChange(of: mesh.identity.shareLocation) { _ in fitRegionToAnnotations() }
+                    .onChange(of: mesh.mapLabels.count) { _ in fitRegionToAnnotations() }
                 }
 
                 // Compass: direction the user is pointed (magnetic heading)
@@ -92,7 +143,7 @@ struct MapTabView: View {
                     .allowsHitTesting(false)
                 }
 
-                // Top controls: share toggle + offline
+                // Top controls: share toggle + offline + add label
                 VStack(spacing: 12) {
                     HStack {
                         Toggle(isOn: shareLocationBinding) {
@@ -102,6 +153,12 @@ struct MapTabView: View {
                         .toggleStyle(.button)
                         .tint(.accentColor)
                         Spacer()
+                        Button {
+                            showAddLabelSheet = true
+                        } label: {
+                            Image(systemName: "mappin.circle.fill")
+                                .font(.body)
+                        }
                         Button {
                             showOfflineInfo = true
                         } label: {
@@ -120,6 +177,24 @@ struct MapTabView: View {
             .navigationBarTitleDisplayMode(.inline)
             .sheet(isPresented: $showOfflineInfo) {
                 OfflineMapSheet(isCaching: $isCaching, region: region, onCache: cacheCurrentRegion)
+            }
+            .sheet(isPresented: $showAddLabelSheet) {
+                AddLabelSheet(regionCenter: region.center) { category in
+                    mesh.sendMapLabel(category: category, lat: region.center.latitude, lon: region.center.longitude)
+                    showAddLabelSheet = false
+                } onCancel: {
+                    showAddLabelSheet = false
+                }
+            }
+            .sheet(item: $selectedLabel) { record in
+                LabelVoteSheet(
+                    record: record,
+                    myVote: mesh.labelVotes[record.id]?[mesh.identity.deviceID],
+                    onVote: { up in
+                        mesh.voteForLabel(labelId: record.id, up: up)
+                    },
+                    selectedLabel: $selectedLabel
+                )
             }
         }
     }
@@ -150,8 +225,8 @@ struct MapTabView: View {
     }
 
     private func fitRegionToAnnotations() {
-        guard !annotationItems.isEmpty else { return }
-        let coords = annotationItems.map(\.coordinate)
+        guard !combinedAnnotations.isEmpty else { return }
+        let coords = combinedAnnotations.map(\.coordinate)
         let lats = coords.map(\.latitude)
         let lons = coords.map(\.longitude)
         let minLat = lats.min() ?? 0
@@ -176,6 +251,26 @@ private struct TransmitterPin: Identifiable {
     let coordinate: CLLocationCoordinate2D
     let displayName: String
     let isCurrentUser: Bool
+}
+
+/// Unified map annotation: transmitter or label (for single Map annotationItems array).
+private enum MapAnnotationItem: Identifiable {
+    case transmitter(TransmitterPin)
+    case label(MapLabelRecord)
+
+    var id: String {
+        switch self {
+        case .transmitter(let p): return "tx-\(p.id)"
+        case .label(let l): return "label-\(l.id.uuidString)"
+        }
+    }
+
+    var coordinate: CLLocationCoordinate2D {
+        switch self {
+        case .transmitter(let p): return p.coordinate
+        case .label(let l): return l.coordinate
+        }
+    }
 }
 
 // MARK: - Compass (direction user is pointed)
@@ -231,6 +326,114 @@ extension LocationHeadingProvider: CLLocationManagerDelegate {
         guard newHeading.headingAccuracy >= 0 else { return }
         DispatchQueue.main.async { [weak self] in
             self?.headingDegrees = newHeading.trueHeading >= 0 ? newHeading.trueHeading : newHeading.magneticHeading
+        }
+    }
+}
+
+// MARK: - Add label (category picker)
+
+private struct AddLabelSheet: View {
+    let regionCenter: CLLocationCoordinate2D
+    let onSelect: (LabelCategory) -> Void
+    let onCancel: () -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Text("Place a label at the current map center. Others can vote on validity.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                ForEach(LabelCategory.allCases, id: \.rawValue) { category in
+                    Button {
+                        onSelect(category)
+                        dismiss()
+                    } label: {
+                        Label(category.displayName, systemImage: category.systemImage)
+                    }
+                }
+            }
+            .navigationTitle("Add label")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        onCancel()
+                        dismiss()
+                    }
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Label detail & vote (confidence score)
+
+private struct LabelVoteSheet: View {
+    let record: MapLabelRecord
+    let myVote: Int?
+    let onVote: (Bool) -> Void
+    @Binding var selectedLabel: MapLabelRecord?
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    Label(record.category.displayName, systemImage: record.category.systemImage)
+                        .font(.headline)
+                    Text("By \(record.senderName)")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                    Text(record.date.formatted(date: .abbreviated, time: .shortened))
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                }
+                Section("Confidence (votes)") {
+                    HStack {
+                        Text("Score")
+                        Spacer()
+                        Text(String(format: "%.0f%%", record.confidenceScore * 100))
+                            .fontWeight(.medium)
+                    }
+                    HStack {
+                        Text("↑ Valid")
+                        Spacer()
+                        Text("\(record.upVotes)")
+                    }
+                    HStack {
+                        Text("↓ Not valid")
+                        Spacer()
+                        Text("\(record.downVotes)")
+                    }
+                }
+                Section("Your vote") {
+                    HStack(spacing: 20) {
+                        Button {
+                            onVote(true)
+                        } label: {
+                            Label("Valid", systemImage: "hand.thumbsup.fill")
+                                .foregroundStyle(myVote == 1 ? .green : .secondary)
+                        }
+                        .buttonStyle(.borderless)
+                        Button {
+                            onVote(false)
+                        } label: {
+                            Label("Not valid", systemImage: "hand.thumbsdown.fill")
+                                .foregroundStyle(myVote == -1 ? .red : .secondary)
+                        }
+                        .buttonStyle(.borderless)
+                    }
+                }
+            }
+            .navigationTitle("Label")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") {
+                        selectedLabel = nil
+                    }
+                }
+            }
         }
     }
 }
