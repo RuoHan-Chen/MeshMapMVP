@@ -20,6 +20,7 @@ struct AlertCluster: Identifiable {
 struct ScoredLabel {
     let payload: MapLabelPayload
     let score: Double
+    let voteCount: Int
 }
 
 struct LabelEventCluster: Identifiable {
@@ -27,7 +28,8 @@ struct LabelEventCluster: Identifiable {
     let labels: [ScoredLabel]
 
     var clusterScore: Double { labels.reduce(0) { $0 + $1.score } }
-    var leadLabel: MapLabelPayload { labels.max(by: { $0.score < $1.score })!.payload }
+    var leadScoredLabel: ScoredLabel { labels.max(by: { $0.score < $1.score })! }
+    var leadLabel: MapLabelPayload { leadScoredLabel.payload }
 }
 
 // MARK: - Engine

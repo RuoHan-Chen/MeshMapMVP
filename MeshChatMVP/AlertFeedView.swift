@@ -16,8 +16,9 @@ struct AlertFeedView: View {
             List {
                 ForEach(clusters) { cluster in
                     LabelEventClusterRow(
-                        cluster:  cluster,
-                        myVotes:  myVotes,
+                        cluster:    cluster,
+                        myVotes:    myVotes,
+                        myDeviceID: mesh.identity.deviceID,
                         onVote: { labelID, confirms in
                             mesh.voteForLabel(labelId: labelID, up: confirms)
                             myVotes[labelID] = confirms ? 1 : -1
@@ -44,6 +45,8 @@ struct AlertFeedView: View {
             .navigationTitle("Alerts")
             .onAppear(perform: reload)
             .onReceive(timer) { _ in reload() }
+            .onChange(of: mesh.mapLabels.count)  { _ in reload() }
+            .onChange(of: mesh.labelVotes.count) { _ in reload() }
         }
     }
 
@@ -104,7 +107,7 @@ struct AlertFeedView: View {
                 myDeviceID:    myID,
                 now:           now
             )
-            return ScoredLabel(payload: payload, score: score)
+            return ScoredLabel(payload: payload, score: score, voteCount: votes[id]?.count ?? 0)
         }
 
         return AlertTrustEngine.clusterLabels(scoredLabels: scored)
@@ -126,13 +129,17 @@ struct AlertFeedView: View {
 // MARK: - Cluster row
 
 private struct LabelEventClusterRow: View {
-    let cluster: LabelEventCluster
-    let myVotes: [UUID: Int]
-    let onVote:  (UUID, Bool) -> Void
+    let cluster:    LabelEventCluster
+    let myVotes:    [UUID: Int]
+    let myDeviceID: String
+    let onVote:     (UUID, Bool) -> Void
 
-    private var lead: MapLabelPayload { cluster.leadLabel }
-    private var myVote: Int? { myVotes[lead.id] }
-    private var category: LabelCategory { LabelCategory(rawValue: lead.category) ?? .other }
+    private var leadScored: ScoredLabel   { cluster.leadScoredLabel }
+    private var lead: MapLabelPayload     { leadScored.payload }
+    private var myVote: Int?              { myVotes[lead.id] }
+    private var isOwn: Bool               { lead.senderID == myDeviceID }
+    private var isUnverified: Bool        { leadScored.voteCount == 0 }
+    private var category: LabelCategory  { LabelCategory(rawValue: lead.category) ?? .other }
     private var displayName: String {
         lead.customLabelName.flatMap { $0.isEmpty ? nil : $0 } ?? category.displayName
     }
@@ -159,9 +166,15 @@ private struct LabelEventClusterRow: View {
                     .font(.body)
                     .lineLimit(2)
                 Spacer()
-                Text(String(format: "%.1f", cluster.clusterScore))
-                    .font(.caption.monospacedDigit())
-                    .foregroundStyle(.secondary)
+                if isUnverified {
+                    Text("Unverified")
+                        .font(.caption.bold())
+                        .foregroundStyle(.orange)
+                } else {
+                    Text(String(format: "%.1f", cluster.clusterScore))
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                }
             }
 
             if let desc = lead.customDescription, !desc.isEmpty {
@@ -183,22 +196,28 @@ private struct LabelEventClusterRow: View {
                     .foregroundStyle(.secondary)
             }
 
-            HStack(spacing: 12) {
-                Button { onVote(lead.id, true) } label: {
-                    Label("Confirm", systemImage: "hand.thumbsup")
-                        .font(.caption)
-                }
-                .buttonStyle(.bordered)
-                .tint(myVote == 1 ? .green : nil)
-                .disabled(myVote != nil)
+            if isOwn {
+                Text("Your post")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+            } else {
+                HStack(spacing: 12) {
+                    Button { onVote(lead.id, true) } label: {
+                        Label("Confirm", systemImage: "hand.thumbsup")
+                            .font(.caption)
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(myVote == 1 ? .green : nil)
+                    .disabled(myVote != nil)
 
-                Button { onVote(lead.id, false) } label: {
-                    Label("Deny", systemImage: "hand.thumbsdown")
-                        .font(.caption)
+                    Button { onVote(lead.id, false) } label: {
+                        Label("Deny", systemImage: "hand.thumbsdown")
+                            .font(.caption)
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(myVote == -1 ? .red : nil)
+                    .disabled(myVote != nil)
                 }
-                .buttonStyle(.bordered)
-                .tint(myVote == -1 ? .red : nil)
-                .disabled(myVote != nil)
             }
         }
         .padding(.vertical, 4)

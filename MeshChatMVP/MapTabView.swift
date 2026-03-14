@@ -69,6 +69,7 @@ struct MapTabView: View {
             senderName: payload.senderName,
             date: Date(timeIntervalSince1970: Double(payload.timestamp) / 1000),
             trustScore: score,
+            voteCount: votes.count,
             customLabelName: payload.customLabelName,
             customDescription: payload.customDescription,
             customSystemImage: payload.customSystemImage
@@ -224,7 +225,7 @@ struct MapTabView: View {
                                             .font(.caption2)
                                             .lineLimit(1)
                                             .multilineTextAlignment(.center)
-                                        Text("\(sorted.count) events · score \(String(format: "%.1f", top.trustScore))")
+                                        Text(top.voteCount == 0 ? "\(sorted.count) events · Unverified" : "\(sorted.count) events · score \(String(format: "%.1f", top.trustScore))")
                                             .font(.caption2)
                                             .foregroundStyle(.secondary)
                                     }
@@ -752,26 +753,38 @@ private struct LabelVoteSheet: View {
                     HStack {
                         Text("Score")
                         Spacer()
-                        Text(String(format: "%.1f", record.trustScore))
-                            .fontWeight(.medium)
+                        if record.voteCount == 0 {
+                            Text("Unverified")
+                                .fontWeight(.medium)
+                                .foregroundStyle(.orange)
+                        } else {
+                            Text(String(format: "%.1f", record.trustScore))
+                                .fontWeight(.medium)
+                        }
                     }
                 }
                 Section("Your vote") {
-                    HStack(spacing: 20) {
-                        Button {
-                            onVote(true)
-                        } label: {
-                            Label("Valid", systemImage: "hand.thumbsup.fill")
-                                .foregroundStyle(myVote == 1 ? .green : .secondary)
+                    if record.senderID == mesh.identity.deviceID {
+                        Text("You can't vote on your own post.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        HStack(spacing: 20) {
+                            Button {
+                                onVote(true)
+                            } label: {
+                                Label("Valid", systemImage: "hand.thumbsup.fill")
+                                    .foregroundStyle(myVote == 1 ? .green : .secondary)
+                            }
+                            .buttonStyle(.borderless)
+                            Button {
+                                onVote(false)
+                            } label: {
+                                Label("Not valid", systemImage: "hand.thumbsdown.fill")
+                                    .foregroundStyle(myVote == -1 ? .red : .secondary)
+                            }
+                            .buttonStyle(.borderless)
                         }
-                        .buttonStyle(.borderless)
-                        Button {
-                            onVote(false)
-                        } label: {
-                            Label("Not valid", systemImage: "hand.thumbsdown.fill")
-                                .foregroundStyle(myVote == -1 ? .red : .secondary)
-                        }
-                        .buttonStyle(.borderless)
                     }
                 }
             }
@@ -843,7 +856,7 @@ private struct ClusterListSheet: View {
                                             .font(.caption)
                                             .foregroundStyle(.secondary)
                                     }
-                                    Text("\(relativeTime(record.date)) · score \(String(format: "%.1f", record.trustScore))")
+                                    Text(record.voteCount == 0 ? "\(relativeTime(record.date)) · Unverified" : "\(relativeTime(record.date)) · score \(String(format: "%.1f", record.trustScore))")
                                         .font(.caption2)
                                         .foregroundStyle(.secondary)
                                 }

@@ -173,6 +173,8 @@ public struct MapLabelRecord: Identifiable, Equatable {
     public let date: Date
     /// Trust score computed by AlertTrustEngine (unbounded; higher = more trusted).
     public var trustScore: Double
+    /// Number of votes cast on this label. 0 = unverified.
+    public var voteCount: Int
     /// Custom name set by user (for hazard/help/other); nil uses category default.
     public let customLabelName: String?
     /// Optional description.
@@ -212,6 +214,7 @@ public struct MapLabelRecord: Identifiable, Equatable {
         senderName: String,
         date: Date,
         trustScore: Double = 0,
+        voteCount: Int = 0,
         customLabelName: String? = nil,
         customDescription: String? = nil,
         customSystemImage: String? = nil
@@ -224,6 +227,7 @@ public struct MapLabelRecord: Identifiable, Equatable {
         self.senderName = senderName
         self.date = date
         self.trustScore = trustScore
+        self.voteCount = voteCount
         self.customLabelName = customLabelName
         self.customDescription = customDescription
         self.customSystemImage = customSystemImage
