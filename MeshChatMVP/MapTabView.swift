@@ -27,8 +27,6 @@ struct MapTabView: View {
     @State private var selectedLabel: MapLabelRecord?
     @State private var selectedCluster: LabelCluster?
     @State private var showSOSAlert = false
-    @State private var showShareMapSheet = false
-    @State private var shareMapURL: URL?
 
     /// Labels built from mesh.mapLabels + mesh.labelVotes; filtered to within 5km and not expired.
     private var labelRecords: [MapLabelRecord] {
@@ -309,14 +307,6 @@ struct MapTabView: View {
             } message: {
                 Text("Dummy SOS button for prototype only. This does not call emergency services.")
             }
-            .sheet(isPresented: $showShareMapSheet) {
-                if let url = shareMapURL {
-                    ShareMapSheet(activityItems: [url]) {
-                        showShareMapSheet = false
-                        shareMapURL = nil
-                    }
-                }
-            }
             .sheet(isPresented: $showOfflineInfo) {
                 OfflineMapSheet(isCaching: $isCaching, region: region, onCache: cacheCurrentRegion)
             }
@@ -564,11 +554,20 @@ struct MapTabView: View {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
         do {
             try html.data(using: .utf8)?.write(to: temp)
-            shareMapURL = temp
-            showShareMapSheet = true
+            presentShareSheet(for: temp)
         } catch {
             // Could present an error; for now skip
         }
+    }
+
+    /// Present the iOS system share sheet for a given file URL.
+    private func presentShareSheet(for url: URL) {
+        guard let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+              let window = scene.windows.first(where: { $0.isKeyWindow }),
+              let root = window.rootViewController else { return }
+        let av = UIActivityViewController(activityItems: [url], applicationActivities: nil)
+        av.popoverPresentationController?.sourceView = window
+        root.present(av, animated: true)
     }
 
     private func buildExportMembers() -> [MapExportMember] {
@@ -691,37 +690,6 @@ private struct MapExport: Codable {
     let exporterName: String
     let members: [MapExportMember]
     let events: [MapExportEvent]
-}
-
-/// Presents system share sheet for a file URL; calls onDismiss when the sheet is dismissed.
-private struct ShareMapSheet: UIViewControllerRepresentable {
-    let activityItems: [Any]
-    var onDismiss: (() -> Void)?
-
-    func makeUIViewController(context: Context) -> UIViewController {
-        let vc = UIViewController()
-        vc.view.backgroundColor = .clear
-        return vc
-    }
-
-    func updateUIViewController(_ uiViewController: UIViewController, context: Context) {
-        guard !context.coordinator.presented else { return }
-        let av = UIActivityViewController(activityItems: activityItems, applicationActivities: nil)
-        av.completionWithItemsHandler = { _, _, _, _ in
-            onDismiss?()
-        }
-        av.popoverPresentationController?.sourceView = uiViewController.view
-        uiViewController.present(av, animated: true)
-        context.coordinator.presented = true
-    }
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator()
-    }
-
-    class Coordinator {
-        var presented = false
-    }
 }
 
 // MARK: - Compass (direction user is pointed)
