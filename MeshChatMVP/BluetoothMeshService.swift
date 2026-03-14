@@ -601,13 +601,18 @@ final class BluetoothMeshService: NSObject, ObservableObject {
                     self.labelVotes[payload.labelId]?[payload.voterID] = payload.vote
                 }
             }
+        case .requestMapLabels:
+            if let central = sourceCentral {
+                pushMapLabelsToCentral(central)
+                log("Request map labels from central \(central.identifier)")
+            }
         }
         if let lat = env.senderLatitude, let lon = env.senderLongitude {
             DispatchQueue.main.async { [weak self] in
                 self?.senderCoordinates[env.senderID] = (lat, lon)
             }
         }
-        if env.ttl > 1 {
+        if env.ttl > 1, env.type != .requestMapLabels {
             var relay = env
             relay.ttl = env.ttl - 1
             let delay = TimeInterval(Double.random(in: 0.05...0.15))
@@ -875,7 +880,28 @@ extension BluetoothMeshService: CBPeripheralDelegate {
             log("Notify state \(error.localizedDescription)")
         } else {
             log("Notify state OK \(peripheral.identifier) isNotifying=\(characteristic.isNotifying)")
+            if characteristic.isNotifying {
+                sendRequestMapLabels(to: peripheral, characteristic: characteristic)
+            }
         }
+    }
+
+    /// As central: ask this peripheral to push its map labels to us (so new joiners get existing labels).
+    private func sendRequestMapLabels(to peripheral: CBPeripheral, characteristic: CBCharacteristic) {
+        let env = MeshEnvelope(
+            id: UUID(),
+            type: .requestMapLabels,
+            senderID: identity.deviceID,
+            senderName: identity.nickname,
+            timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+            ttl: 0,
+            payload: Data(),
+            senderLatitude: nil,
+            senderLongitude: nil
+        )
+        guard let data = MeshEnvelope.encodeJSON(env), data.count <= 512 else { return }
+        peripheral.writeValue(data, for: characteristic, type: .withResponse)
+        log("Requested map labels from \(peripheral.identifier)")
     }
 
     func peripheral(_ peripheral: CBPeripheral, didUpdateValueFor characteristic: CBCharacteristic, error: Error?) {

@@ -6,4 +6,5 @@ enum MessageType: UInt8, Codable, CaseIterable {
     case message = 2
     case mapLabel = 3
     case mapLabelVote = 4
+    case requestMapLabels = 5
 }
