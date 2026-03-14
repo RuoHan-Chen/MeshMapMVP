@@ -26,7 +26,7 @@ struct ChatView: View {
                 ScrollViewReader { proxy in
                     ScrollView {
                         LazyVStack(alignment: .leading, spacing: 10) {
-                            ForEach(mesh.chatMessages) { m in
+                            ForEach(mesh.chatMessages.filter { !$0.isExpired }) { m in
                                 bubble(m)
                                     .id(m.id)
                             }
@@ -36,7 +36,8 @@ struct ChatView: View {
                         .onTapGesture { messageFocused = false }
                     }
                     .onChange(of: mesh.chatMessages.count) { _ in
-                        if let last = mesh.chatMessages.last {
+                        let visible = mesh.chatMessages.filter { !$0.isExpired }
+                        if let last = visible.last {
                             withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
                         }
                     }

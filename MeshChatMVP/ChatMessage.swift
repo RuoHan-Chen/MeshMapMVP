@@ -14,6 +14,13 @@ struct ChatMessage: Identifiable, Equatable, Codable {
     /// JPEG as base64 for persistence / UI (simple MVP; no separate encryption).
     var imageJPEGBase64: String?
 
+    /// Messages expire after 20 minutes by default (map UI filter).
+    static let expirationInterval: TimeInterval = 20 * 60
+
+    var isExpired: Bool {
+        Date().timeIntervalSince(date) > Self.expirationInterval
+    }
+
     init(
         id: UUID = UUID(),
         envelopeId: UUID,

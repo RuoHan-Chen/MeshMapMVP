@@ -1,6 +1,6 @@
 import Foundation
 
-/// Wire message kinds (merged: map + mesh + alerts). Alert/vouch use 7/8 so 3–6 stay map + image.
+/// Wire message kinds: map + chat image + alerts. Map label thumbnails use 9 (chat JPEG chunks stay 6).
 enum MessageType: UInt8, Codable, CaseIterable {
     case announce = 1
     case message = 2
@@ -10,4 +10,6 @@ enum MessageType: UInt8, Codable, CaseIterable {
     case imageChunk = 6
     case alert = 7
     case vouch = 8
+    /// Thumbnail chunks for map labels (distinct from chat imageChunk).
+    case mapLabelImageChunk = 9
 }

@@ -68,8 +68,30 @@ struct DebugDashboardView: View {
                     }
                 }
 
-                Section {
-                    Button("Clear log", role: .destructive) { mesh.clearDebugLog() }
+                Section("Connected (you are central)") {
+                    ForEach(mesh.debugConnectionRows) { row in
+                        VStack(alignment: .leading) {
+                            Text(row.name)
+                            Text(row.state).font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
+                    if mesh.debugConnectionRows.isEmpty {
+                        Text("None — auto-connect runs during scan; check log for Fail connect.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                Section("Maintenance (local only)") {
+                    Button("Clear chat messages", role: .destructive) {
+                        mesh.clearChatMessages()
+                    }
+                    Button("Clear map events", role: .destructive) {
+                        mesh.clearLocalEvents()
+                    }
+                    Button("Clear log", role: .destructive) {
+                        mesh.clearDebugLog()
+                    }
                 }
 
                 Section("Log") {

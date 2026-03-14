@@ -23,7 +23,6 @@
 		A100000F /* MapLabelModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200000F /* MapLabelModels.swift */; };
 		A1000010 /* ImageChunkPayload.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000010 /* ImageChunkPayload.swift */; };
 		A1000011 /* MeshImageUtils.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000011 /* MeshImageUtils.swift */; };
-		A1000030 /* EventTypesConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000030 /* EventTypesConfig.swift */; };
 		A1000015 /* Contact.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000020 /* Contact.swift */; };
 		A1000016 /* PersistedMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000021 /* PersistedMessage.swift */; };
 		A1000017 /* Alert.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000022 /* Alert.swift */; };
@@ -32,10 +31,6 @@
 		A100001A /* AlertPayload.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000025 /* AlertPayload.swift */; };
 		A100001B /* VouchPayload.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000026 /* VouchPayload.swift */; };
 		A100001C /* DatabaseManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000027 /* DatabaseManager.swift */; };
-		A1000028 /* KeyManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000028 /* KeyManager.swift */; };
-		A1000029 /* SavedContact.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000029 /* SavedContact.swift */; };
-		A100002A /* ContactEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200002A /* ContactEditorView.swift */; };
-		A100002B /* ContactsListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200002B /* ContactsListView.swift */; };
 		D974FBAF2F651AD7008F4874 /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = D974FBAE2F651AD7008F4874 /* GRDB */; };
 /* End PBXBuildFile section */
 
@@ -57,7 +52,6 @@
 		A200000F /* MapLabelModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapLabelModels.swift; sourceTree = "<group>"; };
 		A2000010 /* ImageChunkPayload.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageChunkPayload.swift; sourceTree = "<group>"; };
 		A2000011 /* MeshImageUtils.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeshImageUtils.swift; sourceTree = "<group>"; };
-		A2000030 /* EventTypesConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventTypesConfig.swift; sourceTree = "<group>"; };
 		A2000020 /* Contact.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Contact.swift; sourceTree = "<group>"; };
 		A2000021 /* PersistedMessage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersistedMessage.swift; sourceTree = "<group>"; };
 		A2000022 /* Alert.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Alert.swift; sourceTree = "<group>"; };
@@ -66,10 +60,6 @@
 		A2000025 /* AlertPayload.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlertPayload.swift; sourceTree = "<group>"; };
 		A2000026 /* VouchPayload.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VouchPayload.swift; sourceTree = "<group>"; };
 		A2000027 /* DatabaseManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DatabaseManager.swift; sourceTree = "<group>"; };
-		A2000028 /* KeyManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyManager.swift; sourceTree = "<group>"; };
-		A2000029 /* SavedContact.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavedContact.swift; sourceTree = "<group>"; };
-		A200002A /* ContactEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactEditorView.swift; sourceTree = "<group>"; };
-		A200002B /* ContactsListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactsListView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -110,7 +100,6 @@
 				A200000F /* MapLabelModels.swift */,
 				A2000010 /* ImageChunkPayload.swift */,
 				A2000011 /* MeshImageUtils.swift */,
-				A2000030 /* EventTypesConfig.swift */,
 				A2000020 /* Contact.swift */,
 				A2000021 /* PersistedMessage.swift */,
 				A2000022 /* Alert.swift */,
@@ -119,10 +108,6 @@
 				A2000025 /* AlertPayload.swift */,
 				A2000026 /* VouchPayload.swift */,
 				A2000027 /* DatabaseManager.swift */,
-				A2000028 /* KeyManager.swift */,
-				A2000029 /* SavedContact.swift */,
-				A200002A /* ContactEditorView.swift */,
-				A200002B /* ContactsListView.swift */,
 				A200000A /* Assets.xcassets */,
 			);
 			path = MeshChatMVP;
@@ -223,7 +208,6 @@
 				A1000009 /* ChatMessage.swift in Sources */,
 				A1000010 /* ImageChunkPayload.swift in Sources */,
 				A1000011 /* MeshImageUtils.swift in Sources */,
-				A1000030 /* EventTypesConfig.swift in Sources */,
 				A1000015 /* Contact.swift in Sources */,
 				A1000016 /* PersistedMessage.swift in Sources */,
 				A1000017 /* Alert.swift in Sources */,
@@ -232,10 +216,6 @@
 				A100001A /* AlertPayload.swift in Sources */,
 				A100001B /* VouchPayload.swift in Sources */,
 				A100001C /* DatabaseManager.swift in Sources */,
-				A1000028 /* KeyManager.swift in Sources */,
-				A1000029 /* SavedContact.swift in Sources */,
-				A100002A /* ContactEditorView.swift in Sources */,
-				A100002B /* ContactsListView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -291,7 +271,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 74YAK3G39Z;
+				DEVELOPMENT_TEAM = 6VX7H735DM;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = MeshChat;
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "MeshChat uses Bluetooth LE to discover nearby devices and relay messages.";
@@ -304,7 +284,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.ruohanchen.MeshChatMVP;
+				PRODUCT_BUNDLE_IDENTIFIER = com.jeremiah.MeshChatMVP;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
@@ -318,7 +298,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 74YAK3G39Z;
+				DEVELOPMENT_TEAM = 6VX7H735DM;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = MeshChat;
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "MeshChat uses Bluetooth LE to discover nearby devices and relay messages.";
@@ -331,7 +311,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.ruohanchen.MeshChatMVP;
+				PRODUCT_BUNDLE_IDENTIFIER = com.jeremiah.MeshChatMVP;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
