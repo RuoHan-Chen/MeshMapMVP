@@ -235,15 +235,18 @@ final class BluetoothMeshService: NSObject, ObservableObject {
             lat: lat,
             lon: lon,
             senderID: identity.deviceID,
-            senderName: identity.nickname,
+            senderName: String(identity.nickname.prefix(32)),
             timestamp: UInt64(Date().timeIntervalSince1970 * 1000)
         )
-        guard let payloadData = try? JSONEncoder().encode(payload) else { return }
+        guard let payloadData = try? JSONEncoder().encode(payload) else {
+            log("Map label: encode payload failed")
+            return
+        }
         var env = MeshEnvelope(
             id: UUID(),
             type: .mapLabel,
             senderID: identity.deviceID,
-            senderName: identity.nickname,
+            senderName: String(identity.nickname.prefix(32)),
             timestamp: payload.timestamp,
             ttl: defaultTTL,
             payload: payloadData,
@@ -257,7 +260,11 @@ final class BluetoothMeshService: NSObject, ObservableObject {
         DispatchQueue.main.async { [weak self] in
             self?.mapLabels[payload.id] = payload
         }
-        broadcastEnvelope(env, excludeCentral: nil, excludePeripheral: nil)
+        bleQueue.async { [weak self] in
+            if self?.broadcastEnvelope(env, excludeCentral: nil, excludePeripheral: nil) == true {
+                self?.log("Map label sent \(payload.id)")
+            }
+        }
     }
 
     func voteForLabel(labelId: UUID, up: Bool) {
@@ -282,7 +289,9 @@ final class BluetoothMeshService: NSObject, ObservableObject {
             }
             self.labelVotes[labelId]?[self.identity.deviceID] = vote
         }
-        broadcastEnvelope(env, excludeCentral: nil, excludePeripheral: nil)
+        bleQueue.async { [weak self] in
+            self?.broadcastEnvelope(env, excludeCentral: nil, excludePeripheral: nil)
+        }
     }
 
     func clearDebugLog() {
@@ -435,14 +444,19 @@ final class BluetoothMeshService: NSObject, ObservableObject {
 
     // MARK: - Send / relay
 
+    /// Returns true if the envelope was sent (under size limit and encoded).
     private func broadcastEnvelope(
         _ envelope: MeshEnvelope,
         excludeCentral: CBCentral?,
         excludePeripheral: CBPeripheral?
-    ) {
-        guard let data = MeshEnvelope.encodeJSON(envelope), data.count <= 512 else {
-            log("Envelope too large or encode failed")
-            return
+    ) -> Bool {
+        guard let data = MeshEnvelope.encodeJSON(envelope) else {
+            log("Envelope encode failed")
+            return false
+        }
+        guard data.count <= 512 else {
+            log("Envelope too large (\(data.count) bytes, max 512)")
+            return false
         }
         if let char = meshCharacteristic, !subscribedCentrals.isEmpty {
             if let ex = excludeCentral {
@@ -459,6 +473,7 @@ final class BluetoothMeshService: NSObject, ObservableObject {
             remote.writeValue(data, for: c, type: .withResponse)
         }
         log("Sent/relay \(envelope.id) ttl=\(envelope.ttl)")
+        return true
     }
 
     private func handleIncomingData(_ data: Data, sourceCentral: CBCentral?, sourcePeripheral: CBPeripheral?) {
@@ -499,10 +514,22 @@ final class BluetoothMeshService: NSObject, ObservableObject {
                 }
             }
         case .mapLabel:
-            if let payload = try? JSONDecoder().decode(MapLabelPayload.self, from: env.payload) {
+            if let wire = try? JSONDecoder().decode(MapLabelPayload.self, from: env.payload) {
+                let payload = MapLabelPayload(
+                    id: wire.id,
+                    category: wire.category,
+                    lat: wire.lat,
+                    lon: wire.lon,
+                    senderID: env.senderID,
+                    senderName: env.senderName,
+                    timestamp: wire.timestamp
+                )
                 DispatchQueue.main.async { [weak self] in
                     self?.mapLabels[payload.id] = payload
                 }
+                log("Map label received \(payload.id) from \(env.senderName)")
+            } else {
+                log("Map label: decode payload failed")
             }
         case .mapLabelVote:
             if let payload = try? JSONDecoder().decode(MapLabelVotePayload.self, from: env.payload),

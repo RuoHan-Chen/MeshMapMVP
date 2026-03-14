@@ -37,6 +37,7 @@ public enum LabelCategory: String, Codable, CaseIterable {
 }
 
 /// Wire payload for a map label (place on map, share with peers).
+/// Uses short keys and omits sender (use envelope.senderID/senderName) to stay under 512 bytes.
 public struct MapLabelPayload: Codable, Equatable {
     public let id: UUID
     public let category: String
@@ -45,6 +46,10 @@ public struct MapLabelPayload: Codable, Equatable {
     public let senderID: String
     public let senderName: String
     public let timestamp: UInt64
+
+    private enum CodingKeys: String, CodingKey {
+        case id = "i", category = "c", lat = "a", lon = "o", timestamp = "t"
+    }
 
     public init(id: UUID, category: String, lat: Double, lon: Double, senderID: String, senderName: String, timestamp: UInt64) {
         self.id = id
@@ -55,13 +60,39 @@ public struct MapLabelPayload: Codable, Equatable {
         self.senderName = senderName
         self.timestamp = timestamp
     }
+
+    /// Decode from wire (short keys); caller must set senderID/senderName from envelope when storing.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        category = try c.decode(String.self, forKey: .category)
+        lat = try c.decode(Double.self, forKey: .lat)
+        lon = try c.decode(Double.self, forKey: .lon)
+        timestamp = try c.decode(UInt64.self, forKey: .timestamp)
+        senderID = ""
+        senderName = ""
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(category, forKey: .category)
+        try c.encode(lat, forKey: .lat)
+        try c.encode(lon, forKey: .lon)
+        try c.encode(timestamp, forKey: .timestamp)
+        // Omit senderID/senderName on wire; receiver uses envelope
+    }
 }
 
-/// Wire payload for a vote on a label's validity (up = 1, down = -1).
+/// Wire payload for a vote on a label's validity (up = 1, down = -1). Short keys for size.
 public struct MapLabelVotePayload: Codable, Equatable {
     public let labelId: UUID
     public let vote: Int
     public let voterID: String
+
+    private enum CodingKeys: String, CodingKey {
+        case labelId = "l", vote = "v", voterID = "r"
+    }
 
     public init(labelId: UUID, vote: Int, voterID: String) {
         self.labelId = labelId
