@@ -9,6 +9,9 @@ struct ContentView: View {
             ChatView()
                 .tabItem { Label("Chat", systemImage: "bubble.left.and.bubble.right") }
 
+            MapTabView()
+                .tabItem { Label("Map", systemImage: "map") }
+
             DebugDashboardView()
                 .tabItem { Label("Dashboard", systemImage: "square.grid.2x2") }
 
