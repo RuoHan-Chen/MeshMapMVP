@@ -19,6 +19,15 @@
 		A100000A /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A200000A /* Assets.xcassets */; };
 		A100000B /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200000C /* ChatView.swift */; };
 		A100000C /* DebugDashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200000D /* DebugDashboardView.swift */; };
+		A100000D /* Contact.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200000E /* Contact.swift */; };
+		A100000E /* PersistedMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200000F /* PersistedMessage.swift */; };
+		A100000F /* Alert.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000010 /* Alert.swift */; };
+		A1000010 /* Vouch.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000011 /* Vouch.swift */; };
+		A1000011 /* NodeSighting.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000012 /* NodeSighting.swift */; };
+		A1000012 /* AlertPayload.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000013 /* AlertPayload.swift */; };
+		A1000013 /* VouchPayload.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000014 /* VouchPayload.swift */; };
+		A1000014 /* DatabaseManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000015 /* DatabaseManager.swift */; };
+		D974FBAF2F651AD7008F4874 /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = D974FBAE2F651AD7008F4874 /* GRDB */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -35,6 +44,14 @@
 		A200000A /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		A200000C /* ChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatView.swift; sourceTree = "<group>"; };
 		A200000D /* DebugDashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DebugDashboardView.swift; sourceTree = "<group>"; };
+		A200000E /* Contact.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Contact.swift; sourceTree = "<group>"; };
+		A200000F /* PersistedMessage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersistedMessage.swift; sourceTree = "<group>"; };
+		A2000010 /* Alert.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Alert.swift; sourceTree = "<group>"; };
+		A2000011 /* Vouch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Vouch.swift; sourceTree = "<group>"; };
+		A2000012 /* NodeSighting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NodeSighting.swift; sourceTree = "<group>"; };
+		A2000013 /* AlertPayload.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlertPayload.swift; sourceTree = "<group>"; };
+		A2000014 /* VouchPayload.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VouchPayload.swift; sourceTree = "<group>"; };
+		A2000015 /* DatabaseManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DatabaseManager.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -42,6 +59,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				D974FBAF2F651AD7008F4874 /* GRDB in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -70,6 +88,14 @@
 				A2000007 /* ChatPayload.swift */,
 				A2000008 /* AnnouncementPayload.swift */,
 				A2000009 /* ChatMessage.swift */,
+				A200000E /* Contact.swift */,
+				A200000F /* PersistedMessage.swift */,
+				A2000010 /* Alert.swift */,
+				A2000011 /* Vouch.swift */,
+				A2000012 /* NodeSighting.swift */,
+				A2000013 /* AlertPayload.swift */,
+				A2000014 /* VouchPayload.swift */,
+				A2000015 /* DatabaseManager.swift */,
 				A200000A /* Assets.xcassets */,
 			);
 			path = MeshChatMVP;
@@ -127,6 +153,9 @@
 				Base,
 			);
 			mainGroup = A4000000;
+			packageReferences = (
+				D974FBAD2F651AD7008F4874 /* XCRemoteSwiftPackageReference "GRDB" */,
+			);
 			productRefGroup = A4000002 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -163,6 +192,14 @@
 				A1000007 /* ChatPayload.swift in Sources */,
 				A1000008 /* AnnouncementPayload.swift in Sources */,
 				A1000009 /* ChatMessage.swift in Sources */,
+				A100000D /* Contact.swift in Sources */,
+				A100000E /* PersistedMessage.swift in Sources */,
+				A100000F /* Alert.swift in Sources */,
+				A1000010 /* Vouch.swift in Sources */,
+				A1000011 /* NodeSighting.swift in Sources */,
+				A1000012 /* AlertPayload.swift in Sources */,
+				A1000013 /* VouchPayload.swift in Sources */,
+				A1000014 /* DatabaseManager.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -218,7 +255,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 6VX7H735DM;
+				DEVELOPMENT_TEAM = U4P4H7KRKC;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = MeshChat;
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "MeshChat uses Bluetooth LE to discover nearby devices and relay messages.";
@@ -245,7 +282,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 6VX7H735DM;
+				DEVELOPMENT_TEAM = U4P4H7KRKC;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = MeshChat;
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "MeshChat uses Bluetooth LE to discover nearby devices and relay messages.";
@@ -288,6 +325,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		D974FBAD2F651AD7008F4874 /* XCRemoteSwiftPackageReference "GRDB" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/groue/GRDB.swift";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 6.0.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		D974FBAE2F651AD7008F4874 /* GRDB */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = D974FBAD2F651AD7008F4874 /* XCRemoteSwiftPackageReference "GRDB" */;
+			productName = GRDB;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = A6000001 /* Project object */;
 }

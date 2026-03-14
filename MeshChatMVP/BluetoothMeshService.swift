@@ -122,6 +122,7 @@ final class BluetoothMeshService: NSObject, ObservableObject {
         if identity.shareLocation {
             locationManager.startUpdatingLocation()
         }
+        loadPersistedMessages()
         bleQueue.async { [weak self] in
             self?.setupPeripheralIfPowered()
             self?.scheduleScanCycle()
@@ -194,6 +195,19 @@ final class BluetoothMeshService: NSObject, ObservableObject {
         log("connect(\(reason)) → \(id)")
     }
 
+    /// Load the last 200 broadcast messages from the DB into the in-memory chat list.
+    private func loadPersistedMessages() {
+        let db = DatabaseManager.shared
+        guard let persisted = try? db.messages(channel: "broadcast", limit: 200) else { return }
+        let myID = identity.deviceID
+        let loaded = persisted.map { m in
+            m.toChatMessage(isLocal: m.senderID == myID)
+        }
+        DispatchQueue.main.async { [weak self] in
+            self?.chatMessages = loaded
+        }
+    }
+
     func sendChat(text: String) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
@@ -219,8 +233,87 @@ final class BluetoothMeshService: NSObject, ObservableObject {
             env.senderLatitude = loc.lat
             env.senderLongitude = loc.lon
         }
+        let persisted = PersistedMessage(
+            id: env.id.uuidString,
+            senderID: env.senderID,
+            senderName: env.senderName,
+            text: trimmed,
+            timestamp: Int64(env.timestamp),
+            channel: "broadcast",
+            receivedAt: Int64(Date().timeIntervalSince1970)
+        )
+        try? DatabaseManager.shared.upsertContact(id: identity.deviceID, nickname: identity.nickname)
+        try? DatabaseManager.shared.saveMessage(persisted)
         appendLocalChat(envelope: env, text: trimmed)
         broadcastEnvelope(env, excludeCentral: nil, excludePeripheral: nil)
+    }
+
+    func sendAlert(type: Alert.AlertType, severity: Int, lat: Double, lon: Double, description: String) {
+        let now = Int64(Date().timeIntervalSince1970)
+        let alertID = UUID().uuidString
+        let payload = AlertPayload(
+            alertID: alertID,
+            type: type,
+            severity: severity,
+            lat: lat,
+            lon: lon,
+            description: description,
+            createdAt: now,
+            expiresAt: Alert.defaultExpiresAt(for: type)
+        )
+        guard let payloadData = try? JSONEncoder().encode(payload) else { return }
+        let env = MeshEnvelope(
+            id: UUID(),
+            type: .alert,
+            senderID: identity.deviceID,
+            senderName: identity.nickname,
+            timestamp: UInt64(now * 1000),
+            ttl: defaultTTL,
+            payload: payloadData,
+            senderLatitude: identity.shareLocation ? lastKnownLocation?.lat : nil,
+            senderLongitude: identity.shareLocation ? lastKnownLocation?.lon : nil
+        )
+        // Persist locally before broadcasting
+        let alert = Alert(
+            id: alertID,
+            authorID: identity.deviceID,
+            type: type,
+            severity: severity,
+            lat: lat,
+            lon: lon,
+            description: description,
+            createdAt: now,
+            expiresAt: payload.expiresAt,
+            trustScore: 1.0     // author fully trusts their own alert
+        )
+        try? DatabaseManager.shared.upsertContact(id: identity.deviceID, nickname: identity.nickname)
+        try? DatabaseManager.shared.saveAlert(alert)
+        broadcastEnvelope(env, excludeCentral: nil, excludePeripheral: nil)
+        log("Alert sent: \(type.rawValue) sev=\(severity)")
+    }
+
+    func sendVouch(alertID: String, confirms: Bool) {
+        let value = confirms ? 1 : -1
+        let payload = VouchPayload(alertID: alertID, value: value)
+        guard let payloadData = try? JSONEncoder().encode(payload) else { return }
+        let env = MeshEnvelope(
+            id: UUID(),
+            type: .vouch,
+            senderID: identity.deviceID,
+            senderName: identity.nickname,
+            timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+            ttl: defaultTTL,
+            payload: payloadData,
+            senderLatitude: nil,
+            senderLongitude: nil
+        )
+        let vouch = Vouch(alertID: alertID, voucherID: identity.deviceID,
+                          value: value, timestamp: Int64(Date().timeIntervalSince1970))
+        try? DatabaseManager.shared.upsertContact(id: identity.deviceID, nickname: identity.nickname)
+        try? DatabaseManager.shared.saveVouch(vouch)
+        try? DatabaseManager.shared.recomputeTrustScore(alertID: alertID)
+        broadcastEnvelope(env, excludeCentral: nil, excludePeripheral: nil)
+        log("Vouch sent: alertID=\(alertID) value=\(value)")
     }
 
     func clearDebugLog() {
@@ -408,6 +501,9 @@ final class BluetoothMeshService: NSObject, ObservableObject {
             log("Drop dedup \(env.id)")
             return
         }
+        // Always upsert the sender as a contact
+        try? DatabaseManager.shared.upsertContact(id: env.senderID, nickname: env.senderName)
+
         switch env.type {
         case .announce:
             if let a = try? JSONDecoder().decode(AnnouncementPayload.self, from: env.payload) {
@@ -419,6 +515,16 @@ final class BluetoothMeshService: NSObject, ObservableObject {
         case .message:
             if let chat = try? JSONDecoder().decode(ChatPayload.self, from: env.payload) {
                 let envCopy = env
+                let persisted = PersistedMessage(
+                    id: env.id.uuidString,
+                    senderID: env.senderID,
+                    senderName: env.senderName,
+                    text: chat.text,
+                    timestamp: Int64(env.timestamp),
+                    channel: "broadcast",
+                    receivedAt: Int64(Date().timeIntervalSince1970)
+                )
+                try? DatabaseManager.shared.saveMessage(persisted)
                 DispatchQueue.main.async { [weak self] in
                     guard let self else { return }
                     let distance = self.distanceFromMe(senderID: envCopy.senderID)
@@ -436,11 +542,41 @@ final class BluetoothMeshService: NSObject, ObservableObject {
                     )
                 }
             }
+        case .alert:
+            if let payload = try? JSONDecoder().decode(AlertPayload.self, from: env.payload) {
+                let alert = Alert(
+                    id: payload.alertID,
+                    authorID: env.senderID,
+                    type: payload.type,
+                    severity: payload.severity,
+                    lat: payload.lat,
+                    lon: payload.lon,
+                    description: payload.description,
+                    createdAt: payload.createdAt,
+                    expiresAt: payload.expiresAt,
+                    trustScore: 0.0
+                )
+                try? DatabaseManager.shared.saveAlert(alert)
+                log("Alert received: \(payload.type.rawValue) sev=\(payload.severity) from \(env.senderName)")
+            }
+        case .vouch:
+            if let payload = try? JSONDecoder().decode(VouchPayload.self, from: env.payload) {
+                let vouch = Vouch(
+                    alertID: payload.alertID,
+                    voucherID: env.senderID,
+                    value: payload.value,
+                    timestamp: Int64(Date().timeIntervalSince1970)
+                )
+                try? DatabaseManager.shared.saveVouch(vouch)
+                try? DatabaseManager.shared.recomputeTrustScore(alertID: payload.alertID)
+                log("Vouch received: alertID=\(payload.alertID) value=\(payload.value) from \(env.senderName)")
+            }
         }
         if let lat = env.senderLatitude, let lon = env.senderLongitude {
             DispatchQueue.main.async { [weak self] in
                 self?.senderCoordinates[env.senderID] = (lat, lon)
             }
+            try? DatabaseManager.shared.recordSighting(nodeID: env.senderID, lat: lat, lon: lon, rssi: 0)
         }
         if env.ttl > 1 {
             var relay = env
