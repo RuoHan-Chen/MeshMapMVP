@@ -41,6 +41,11 @@ final class BluetoothMeshService: NSObject, ObservableObject {
     /// Sender ID → (lat, lon) from received envelopes (only when senders share location).
     @Published var senderCoordinates: [String: (lat: Double, lon: Double)] = [:]
 
+    /// Map labels (id → payload); shared via .mapLabel envelopes.
+    @Published var mapLabels: [UUID: MapLabelPayload] = [:]
+    /// Label votes: labelId → (voterID → 1 or -1); shared via .mapLabelVote envelopes.
+    @Published var labelVotes: [UUID: [String: Int]] = [:]
+
     /// Battery-friendly: scan only during windows; idle between.
     @Published var isScanning: Bool = false
     @Published var scanWindowSeconds: Double = 12
@@ -303,6 +308,63 @@ final class BluetoothMeshService: NSObject, ObservableObject {
         appendLocalChat(envelope: firstEnv, text: "[photo]", imageJPEGBase64: imageB64)
     }
 
+    func sendMapLabel(category: LabelCategory, lat: Double, lon: Double) {
+        let payload = MapLabelPayload(
+            id: UUID(),
+            category: category.rawValue,
+            lat: lat,
+            lon: lon,
+            senderID: identity.deviceID,
+            senderName: identity.nickname,
+            timestamp: UInt64(Date().timeIntervalSince1970 * 1000)
+        )
+        guard let payloadData = try? JSONEncoder().encode(payload) else { return }
+        var env = MeshEnvelope(
+            id: UUID(),
+            type: .mapLabel,
+            senderID: identity.deviceID,
+            senderName: identity.nickname,
+            timestamp: payload.timestamp,
+            ttl: defaultTTL,
+            payload: payloadData,
+            senderLatitude: nil,
+            senderLongitude: nil
+        )
+        if identity.shareLocation, let loc = lastKnownLocation {
+            env.senderLatitude = loc.lat
+            env.senderLongitude = loc.lon
+        }
+        DispatchQueue.main.async { [weak self] in
+            self?.mapLabels[payload.id] = payload
+        }
+        broadcastEnvelope(env, excludeCentral: nil, excludePeripheral: nil)
+    }
+
+    func voteForLabel(labelId: UUID, up: Bool) {
+        let vote = up ? 1 : -1
+        let payload = MapLabelVotePayload(labelId: labelId, vote: vote, voterID: identity.deviceID)
+        guard let payloadData = try? JSONEncoder().encode(payload) else { return }
+        let env = MeshEnvelope(
+            id: UUID(),
+            type: .mapLabelVote,
+            senderID: identity.deviceID,
+            senderName: identity.nickname,
+            timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+            ttl: defaultTTL,
+            payload: payloadData,
+            senderLatitude: nil,
+            senderLongitude: nil
+        )
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            if self.labelVotes[labelId] == nil {
+                self.labelVotes[labelId] = [:]
+            }
+            self.labelVotes[labelId]?[self.identity.deviceID] = vote
+        }
+        broadcastEnvelope(env, excludeCentral: nil, excludePeripheral: nil)
+    }
+
     func clearDebugLog() {
         DispatchQueue.main.async { [weak self] in
             self?.debugLines = []
@@ -532,6 +594,23 @@ final class BluetoothMeshService: NSObject, ObservableObject {
                     DispatchQueue.main.async { [weak self] in
                         self?.mergeImageChunk(env: env, chunk: chunk)
                     }
+                }
+            }
+        case .mapLabel:
+            if let payload = try? JSONDecoder().decode(MapLabelPayload.self, from: env.payload) {
+                DispatchQueue.main.async { [weak self] in
+                    self?.mapLabels[payload.id] = payload
+                }
+            }
+        case .mapLabelVote:
+            if let payload = try? JSONDecoder().decode(MapLabelVotePayload.self, from: env.payload),
+               payload.vote == 1 || payload.vote == -1 {
+                DispatchQueue.main.async { [weak self] in
+                    guard let self else { return }
+                    if self.labelVotes[payload.labelId] == nil {
+                        self.labelVotes[payload.labelId] = [:]
+                    }
+                    self.labelVotes[payload.labelId]?[payload.voterID] = payload.vote
                 }
             }
         }

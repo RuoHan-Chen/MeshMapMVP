@@ -20,8 +20,9 @@
 		A100000B /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200000C /* ChatView.swift */; };
 		A100000C /* DebugDashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200000D /* DebugDashboardView.swift */; };
 		A100000E /* MapTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200000E /* MapTabView.swift */; };
-		A100000F /* ImageChunkPayload.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200000F /* ImageChunkPayload.swift */; };
-		A1000010 /* MeshImageUtils.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000010 /* MeshImageUtils.swift */; };
+		A100000F /* MapLabelModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200000F /* MapLabelModels.swift */; };
+		A1000010 /* ImageChunkPayload.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000010 /* ImageChunkPayload.swift */; };
+		A1000011 /* MeshImageUtils.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000011 /* MeshImageUtils.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -39,8 +40,9 @@
 		A200000C /* ChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatView.swift; sourceTree = "<group>"; };
 		A200000D /* DebugDashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DebugDashboardView.swift; sourceTree = "<group>"; };
 		A200000E /* MapTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapTabView.swift; sourceTree = "<group>"; };
-		A200000F /* ImageChunkPayload.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageChunkPayload.swift; sourceTree = "<group>"; };
-		A2000010 /* MeshImageUtils.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeshImageUtils.swift; sourceTree = "<group>"; };
+		A200000F /* MapLabelModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapLabelModels.swift; sourceTree = "<group>"; };
+		A2000010 /* ImageChunkPayload.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageChunkPayload.swift; sourceTree = "<group>"; };
+		A2000011 /* MeshImageUtils.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeshImageUtils.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -77,8 +79,9 @@
 				A2000007 /* ChatPayload.swift */,
 				A2000008 /* AnnouncementPayload.swift */,
 				A2000009 /* ChatMessage.swift */,
-				A200000F /* ImageChunkPayload.swift */,
-				A2000010 /* MeshImageUtils.swift */,
+				A200000F /* MapLabelModels.swift */,
+				A2000010 /* ImageChunkPayload.swift */,
+				A2000011 /* MeshImageUtils.swift */,
 				A200000A /* Assets.xcassets */,
 			);
 			path = MeshChatMVP;
@@ -163,6 +166,7 @@
 			files = (
 				A1000001 /* MeshChatApp.swift in Sources */,
 				A1000002 /* ContentView.swift in Sources */,
+				A100000F /* MapLabelModels.swift in Sources */,
 				A100000B /* ChatView.swift in Sources */,
 				A100000C /* DebugDashboardView.swift in Sources */,
 				A100000E /* MapTabView.swift in Sources */,
@@ -173,8 +177,8 @@
 				A1000007 /* ChatPayload.swift in Sources */,
 				A1000008 /* AnnouncementPayload.swift in Sources */,
 				A1000009 /* ChatMessage.swift in Sources */,
-				A100000F /* ImageChunkPayload.swift in Sources */,
-				A1000010 /* MeshImageUtils.swift in Sources */,
+				A1000010 /* ImageChunkPayload.swift in Sources */,
+				A1000011 /* MeshImageUtils.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

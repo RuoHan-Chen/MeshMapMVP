@@ -4,6 +4,8 @@ import Foundation
 enum MessageType: UInt8, Codable, CaseIterable {
     case announce = 1
     case message = 2
-    /// Chunked JPEG over mesh (each chunk is its own envelope ≤512 B; same transferId).
-    case imageChunk = 3
+    case mapLabel = 3
+    case mapLabelVote = 4
+    /// Chunked JPEG over mesh (envelope ≤512 B; same transferId). Raw 5 so it does not clash with map on wire.
+    case imageChunk = 5
 }
