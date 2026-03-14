@@ -14,6 +14,7 @@
 		A1000005 /* MessageType.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000005 /* MessageType.swift */; };
 		A1000006 /* DeviceIdentity.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000006 /* DeviceIdentity.swift */; };
 		A1000007 /* ChatPayload.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000007 /* ChatPayload.swift */; };
+		A100002D /* ChatCrypto.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200002D /* ChatCrypto.swift */; };
 		A1000008 /* AnnouncementPayload.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000008 /* AnnouncementPayload.swift */; };
 		A1000009 /* ChatMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000009 /* ChatMessage.swift */; };
 		A100000A /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A200000A /* Assets.xcassets */; };
@@ -48,6 +49,7 @@
 		A2000005 /* MessageType.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageType.swift; sourceTree = "<group>"; };
 		A2000006 /* DeviceIdentity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceIdentity.swift; sourceTree = "<group>"; };
 		A2000007 /* ChatPayload.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatPayload.swift; sourceTree = "<group>"; };
+		A200002D /* ChatCrypto.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatCrypto.swift; sourceTree = "<group>"; };
 		A2000008 /* AnnouncementPayload.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnnouncementPayload.swift; sourceTree = "<group>"; };
 		A2000009 /* ChatMessage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatMessage.swift; sourceTree = "<group>"; };
 		A200000A /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -105,6 +107,7 @@
 				A2000005 /* MessageType.swift */,
 				A2000006 /* DeviceIdentity.swift */,
 				A2000007 /* ChatPayload.swift */,
+				A200002D /* ChatCrypto.swift */,
 				A2000008 /* AnnouncementPayload.swift */,
 				A2000009 /* ChatMessage.swift */,
 				A200000F /* MapLabelModels.swift */,
@@ -219,6 +222,7 @@
 				A1000005 /* MessageType.swift in Sources */,
 				A1000006 /* DeviceIdentity.swift in Sources */,
 				A1000007 /* ChatPayload.swift in Sources */,
+				A100002D /* ChatCrypto.swift in Sources */,
 				A1000008 /* AnnouncementPayload.swift in Sources */,
 				A1000009 /* ChatMessage.swift in Sources */,
 				A1000010 /* ImageChunkPayload.swift in Sources */,

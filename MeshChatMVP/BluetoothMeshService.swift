@@ -196,14 +196,30 @@ final class BluetoothMeshService: NSObject, ObservableObject {
     func sendDirectChat(text: String, toPeerID: String, peerDisplayName: String) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, toPeerID != identity.deviceID else { return }
-        let payload: ChatPayload = ChatPayload(text: trimmed, recipientID: toPeerID)
+        let ts = UInt64(Date().timeIntervalSince1970 * 1000)
+        let encKeys = KeyManager.loadOrCreateEncryptionKeypair()
+        let payload: ChatPayload
+        encKeyLock.lock()
+        let theirEnc = encryptionPublicKeyByDeviceID[toPeerID]
+        encKeyLock.unlock()
+        if let theirEnc,
+           let sealed = try? ChatCrypto.seal(
+               plaintext: trimmed,
+               myPrivate: encKeys.privateKey,
+               theirPublic: theirEnc,
+               aad: ChatCrypto.aad(senderID: identity.deviceID, recipientID: toPeerID, timestampMs: ts)
+           ) {
+            payload = ChatPayload(text: "", recipientID: toPeerID, encrypted: true, ciphertextB64: sealed.base64EncodedString())
+        } else {
+            payload = ChatPayload(text: trimmed, recipientID: toPeerID)
+        }
         guard let payloadData = try? JSONEncoder().encode(payload) else { return }
         var env = MeshEnvelope(
             id: UUID(),
             type: .message,
             senderID: identity.deviceID,
             senderName: identity.nickname,
-            timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+            timestamp: ts,
             ttl: defaultTTL,
             payload: payloadData,
             senderLatitude: nil,
@@ -288,6 +304,9 @@ final class BluetoothMeshService: NSObject, ObservableObject {
     private var discoveredPeerById: [UUID: DiscoveredPeer] = [:]
     /// Peripheral id → peer Curve25519 public key (from announce on that link).
     private var peerPublicKeyByPeripheralId: [UUID: Data] = [:]
+    /// deviceID → peer X25519 encryption public key (E2E DMs).
+    private var encryptionPublicKeyByDeviceID: [String: Data] = [:]
+    private let encKeyLock = NSLock()
     private var scanIdleWorkItem: DispatchWorkItem?
     private var scanCountdownTimer: Timer?
     private var nextScanDeadline: Date?
@@ -967,6 +986,11 @@ final class BluetoothMeshService: NSObject, ObservableObject {
                 }
                 DispatchQueue.main.async { [weak self] in
                     self?.announceNicknames[env.senderID] = a.nickname
+                    if let encB64 = a.encryptionPublicKeyBase64, let d = Data(base64Encoded: encB64), d.count == 32 {
+                        self?.encKeyLock.lock()
+                        self?.encryptionPublicKeyByDeviceID[env.senderID] = d
+                        self?.encKeyLock.unlock()
+                    }
                 }
                 log("Announce \(a.nickname)")
             }
@@ -974,6 +998,16 @@ final class BluetoothMeshService: NSObject, ObservableObject {
             if let chat = try? JSONDecoder().decode(ChatPayload.self, from: env.payload) {
                 let envCopy = env
                 let me = identity.deviceID
+                var displayText = chat.text
+                encKeyLock.lock()
+                let senderEnc = encryptionPublicKeyByDeviceID[env.senderID]
+                encKeyLock.unlock()
+                if chat.encrypted == true, let b64 = chat.ciphertextB64, let raw = Data(base64Encoded: b64),
+                   let senderEnc {
+                    let encPriv = KeyManager.loadOrCreateEncryptionKeypair().privateKey
+                    let aad = ChatCrypto.aad(senderID: env.senderID, recipientID: me, timestampMs: env.timestamp)
+                    displayText = (try? ChatCrypto.open(combined: raw, myPrivate: encPriv, theirPublic: senderEnc, aad: aad)) ?? "🔒"
+                }
                 if let recipient = chat.recipientID {
                     if dmPastTTL { break }
                     let involved = recipient == me || envCopy.senderID == me
@@ -984,7 +1018,7 @@ final class BluetoothMeshService: NSObject, ObservableObject {
                             id: env.id.uuidString,
                             senderID: env.senderID,
                             senderName: env.senderName,
-                            text: chat.text,
+                            text: displayText,
                             timestamp: Int64(env.timestamp),
                             channel: ch,
                             receivedAt: Int64(Date().timeIntervalSince1970)
@@ -1001,15 +1035,15 @@ final class BluetoothMeshService: NSObject, ObservableObject {
                                     envelopeId: envCopy.id,
                                     senderID: envCopy.senderID,
                                     senderName: envCopy.senderName,
-                                    text: chat.text,
+                                    text: displayText,
                                     date: Date(),
                                     isLocal: false,
                                     distanceFromMe: self.distanceFromMe(senderID: envCopy.senderID),
                                     imageJPEGBase64: nil
                                 ))
                                 self.directThreadMessages[otherPeer] = arr
-                                self.recordContactInbound(peerID: otherPeer, preview: chat.text, incrementUnread: true)
-                                self.notifyIncomingIfNeeded(sender: envCopy.senderName, text: chat.text)
+                                self.recordContactInbound(peerID: otherPeer, preview: displayText, incrementUnread: true)
+                                self.notifyIncomingIfNeeded(sender: envCopy.senderName, text: displayText)
                             }
                         }
                     }
@@ -1252,9 +1286,11 @@ final class BluetoothMeshService: NSObject, ObservableObject {
 
     /// Build announce envelope on main so we can include location if shareLocation is on.
     private func buildAnnounceEnvelope() -> MeshEnvelope? {
+        let enc = KeyManager.loadOrCreateEncryptionKeypair()
         let payload = AnnouncementPayload(
             nickname: identity.nickname,
-            publicKeyBase64: KeyManager.publicKeyData.base64EncodedString()
+            publicKeyBase64: KeyManager.publicKeyData.base64EncodedString(),
+            encryptionPublicKeyBase64: enc.publicKey.base64EncodedString()
         )
         guard let nickData = try? JSONEncoder().encode(payload) else { return nil }
         var env = MeshEnvelope(

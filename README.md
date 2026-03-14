@@ -1,119 +1,32 @@
-# MeshChat MVP (CoreBluetooth mesh scaffold)
+# MeshChat MVP
 
-Bare-bones **BitChat-style** idea (envelope + TTL + dedup + relay) using **CoreBluetooth only** — no MultipeerConnectivity, Nostr, Noise, or fragmentation.
+**Bluetooth LE mesh** (Core Bluetooth) + **E2E encrypted DMs** between two people.
 
-Aligned conceptually with [`bitchat_architecture.md`](../bitchat_architecture.md): one envelope, announce + chat payloads, TTL flood, in-memory dedup.
+- **Transport:** Dual-role GATT (`6E400001-…` / `6E400002-…`), scan + advertise, write + notify, TTL relay.
+- **Identity:** Ed25519-style signing keypair in Keychain → stable **deviceID** (base64 public key).
+- **DM encryption:** Separate **X25519** keypair → announces include `encryptionPublicKeyBase64`. Direct messages use **ECDH + HKDF-SHA256 + AES-GCM** when both sides have exchanged announces; otherwise plaintext fallback (older peers).
 
----
+## Build
 
-## Architecture summary
-
-| Piece | Role |
-|-------|------|
-| **DeviceIdentity** | Stable `deviceID` + `nickname` in UserDefaults |
-| **MeshEnvelope** | JSON on the wire: `id`, `type`, `senderID`, `senderName`, `timestamp`, `ttl`, `payload` |
-| **MessageType** | `.announce` (nickname JSON), `.message` (chat JSON) |
-| **BluetoothMeshService** | Dual role: `CBPeripheralManager` (advertise + GATT server) + `CBCentralManager` (scan + connect + GATT client) |
-| **GATT** | One service `6E400001-…`, one characteristic `6E400002-…` — **write** (central → peripheral) + **notify** (peripheral → subscribed centrals) |
-| **Send** | Encode envelope → write to every connected remote characteristic → `updateValue` to all subscribed centrals |
-| **Connect** | Uses the **same `CBPeripheral` instance from discovery** (manual Connect used `retrievePeripherals`, which is often **empty** until a prior session — that’s why connect failed before). **Auto-connect** runs when a peer is discovered during a scan window. |
-| **Scan** | **Periodic**: scan ON (default 12s) then OFF (default 40s) to save battery; **Scan now** forces a window. |
-| **Receive** | Peripheral `didReceiveWrite` or central `didUpdateValue` (notify) → decode → dedup by `envelope.id` → UI → if `ttl > 1`, decrement + jitter + rebroadcast (exclude immediate source) |
-
----
-
-## File tree
-
-```
-MeshChatMVP/
-├── README.md
-├── MeshChatMVP.xcodeproj/
-│   └── project.pbxproj
-└── MeshChatMVP/
-    ├── MeshChatApp.swift
-    ├── ContentView.swift (tabs: Chat / Dashboard / You)
-    ├── ChatView.swift
-    ├── DebugDashboardView.swift
-    ├── BluetoothMeshService.swift
-    ├── MeshEnvelope.swift
-    ├── MessageType.swift
-    ├── DeviceIdentity.swift
-    ├── ChatPayload.swift
-    ├── AnnouncementPayload.swift
-    ├── ChatMessage.swift
-    └── Assets.xcassets/
+```bash
+cd MeshChatMVP
+xcodebuild -project MeshChatMVP.xcodeproj -scheme MeshChatMVP -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' build
 ```
 
----
+Or open **`MeshChatMVP.xcodeproj`** in Xcode → Run on **two physical devices** (BLE). Simulators have limited BLE; prefer real hardware.
 
-## Coordinate sharing & distance
+## Run
 
-- **Optional location:** When **Share my location with peers** is on (You → Privacy), envelopes include `senderLatitude` / `senderLongitude` so peers can show inferred distance.
-- **Opt-out:** Users can turn the toggle off anytime; no coordinates are sent when off.
-- **Distance in chat:** For messages from others who share location, the UI shows e.g. "~150 m away" or "~2.3 km away" (Haversine from your last known location to their last shared coordinates).
-- **Storage:** Last known coordinates per sender are kept in memory; your location is updated via Core Location when the app is in use and sharing is on.
+1. Install on two phones, Bluetooth on, app in foreground.
+2. Wait for link / announce so each learns the other’s **encryption** key.
+3. Add/save contact if your UI requires it; open **private chat** and send — payload on the wire is **ciphertext** when encrypted.
 
----
+## Main files
 
-## Info.plist / permissions
-
-- **NSBluetoothAlwaysUsageDescription** — set in Xcode build settings as  
-  `INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription`  
-  (already in `project.pbxproj`).
-- **NSLocationWhenInUseUsageDescription** — used when coordinate sharing is enabled so distance can be shown (user can opt out in You → Privacy).
-
-No background modes required for foreground demo.
-
----
-
-## Run on two physical iPhones
-
-1. Open `MeshChatMVP.xcodeproj` in Xcode.
-2. Set **Team** + unique **Bundle ID** (e.g. `com.yourname.MeshChatMVP`) for each device if needed.
-3. Build & run on **Phone A**, then **Phone B** (Bluetooth must be on; grant permission).
-4. Wait until both show **Bluetooth: On** and **Discovered** lists populate (same room, ~10 m).
-5. On **A**, tap **Connect** next to **B** (and optionally on **B** connect to **A** for symmetric links — see limitations).
-6. Type a message and **Send**; open **Log** to see send/relay lines.
-
-**Three-device relay (A–B–C):** Connect A↔B and B↔C (B must be central to both). A sends → B relays toward C with lower TTL. Reliability depends on iOS connection limits and who is peripheral/central.
-
----
-
-## Simulator vs device
-
-| | Simulator | Two real devices |
-|--|-----------|------------------|
-| CoreBluetooth central/peripheral | **Unreliable / often non-functional** for real BLE mesh | **Required** for discovery, connect, notify |
-| Compile | Yes | Yes |
-| Proof of relay + TTL + dedup | No | Yes |
-
----
-
-## Known iOS CoreBluetooth limitations (honest)
-
-- **Simulator:** BLE is not a substitute for device testing.
-- **Connection model:** Each link is central ↔ peripheral; a **full mesh** needs many simultaneous connections — iOS limits how many centrals/peripherals you can hold (~7 central links often cited; behavior varies).
-- **Not symmetric by default:** If only A connects to B, B might not have an outbound central link to A unless B also taps Connect on A (both sides advertising + both scanning helps discovery; **both may need to connect** to get bidirectional notify+write depending on topology).
-- **ATT MTU:** Keep JSON envelopes small (app caps at 512 bytes).
-- **Background:** Without background modes + entitlements, **no guarantee** of relay when app is suspended.
-- **No production claims:** Jitter + dedup reduce loops but do not make a robust production mesh.
-
----
-
-## Stubbed / later phases
-
-- Persistent chat history
-- Fragmentation, compression, signing
-- Source routing / topology graph
-- Background relay + queue
-- Android interop
-- Bonding / security
-
----
-
-## Self-review (compilation)
-
-- Swift 5, iOS 16+ deployment target.
-- `MessageType` is `Codable`; `MeshEnvelope` uses JSON `Data` (base64 in JSON).
-- `CBManagerState` used in SwiftUI — **import CoreBluetooth** in `ContentView.swift` (done).
-- Set your **Development Team** in Xcode if signing fails.
+| File | Role |
+|------|------|
+| `MeshChatMVP/BluetoothMeshService.swift` | BLE mesh, relay, DM send/receive |
+| `MeshChatMVP/ChatCrypto.swift` | AES-GCM + X25519 DM crypto |
+| `MeshChatMVP/KeyManager.swift` | Signing + encryption keypairs (Keychain) |
+| `MeshChatMVP/AnnouncementPayload.swift` | Nickname + signing key + **encryption** key |
+| `MeshChatMVP/ChatPayload.swift` | DM JSON (`encrypted` + `ciphertextB64` or `text`) |

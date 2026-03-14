@@ -6,6 +6,7 @@ import Security
 enum KeyManager {
     private static let keychainService = "meshchat.device.signing"
     private static let keychainAccount = "private"
+    private static let keychainEncAccount = "encryption-x25519"
 
     /// Load or create keypair. Thread-safe enough for app use (call from main at launch).
     static func loadOrCreateKeypair() -> (publicKey: Data, privateKey: Curve25519.Signing.PrivateKey) {
@@ -69,5 +70,43 @@ enum KeyManager {
         while base64.count % 4 != 0 { base64.append("=") }
         guard let data = Data(base64Encoded: base64), data.count == 32 else { return nil }
         return data
+    }
+
+    // MARK: - Encryption (X25519) for E2E DMs
+
+    static func loadOrCreateEncryptionKeypair() -> (publicKey: Data, privateKey: Curve25519.KeyAgreement.PrivateKey) {
+        if let priv = loadEncryptionPrivate() {
+            return (priv.publicKey.rawRepresentation, priv)
+        }
+        let priv = Curve25519.KeyAgreement.PrivateKey()
+        saveEncryptionPrivate(priv)
+        return (priv.publicKey.rawRepresentation, priv)
+    }
+
+    private static func saveEncryptionPrivate(_ key: Curve25519.KeyAgreement.PrivateKey) {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: keychainService,
+            kSecAttrAccount as String: keychainEncAccount,
+            kSecValueData as String: key.rawRepresentation,
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        ]
+        SecItemDelete(query as CFDictionary)
+        SecItemAdd(query as CFDictionary, nil)
+    }
+
+    private static func loadEncryptionPrivate() -> Curve25519.KeyAgreement.PrivateKey? {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: keychainService,
+            kSecAttrAccount as String: keychainEncAccount,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne
+        ]
+        var out: AnyObject?
+        guard SecItemCopyMatching(query as CFDictionary, &out) == errSecSuccess,
+              let data = out as? Data,
+              let key = try? Curve25519.KeyAgreement.PrivateKey(rawRepresentation: data) else { return nil }
+        return key
     }
 }
