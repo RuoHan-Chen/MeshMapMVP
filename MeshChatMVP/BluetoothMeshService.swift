@@ -1,6 +1,7 @@
 import Foundation
 import CoreBluetooth
 import CoreLocation
+import UserNotifications
 
 // MARK: - GATT UUIDs (single service + single characteristic)
 private let kMeshServiceUUID = CBUUID(string: "6E400001-B5A3-F393-E0A9-E50E24DCCA9E")
@@ -43,6 +44,9 @@ final class BluetoothMeshService: NSObject, ObservableObject {
     @Published var mapLabels: [UUID: MapLabelPayload] = [:]
     /// Label votes: labelId → (voterID → 1 or -1); shared via .mapLabelVote envelopes.
     @Published var labelVotes: [UUID: [String: Int]] = [:]
+
+    /// Seconds remaining before this user can post another map label (30s cooldown).
+    @Published var mapLabelCooldownRemaining: Double = 0
 
     /// Battery-friendly: scan only during windows; idle between.
     @Published var isScanning: Bool = false
@@ -88,6 +92,9 @@ final class BluetoothMeshService: NSObject, ObservableObject {
     private var bleScanIdle: Double = 40
 
     private let defaultTTL: UInt8 = 5
+    private let mapLabelCooldownSeconds: TimeInterval = 30
+    private var lastMapLabelSendTime: Date?
+    private var mapLabelCooldownTimer: Timer?
 
     override init() {
         identity = DeviceIdentity.load()
@@ -124,6 +131,10 @@ final class BluetoothMeshService: NSObject, ObservableObject {
     }
 
     func start() {
+        requestNotificationPermissionForLabels()
+        DispatchQueue.main.async { [weak self] in
+            UNUserNotificationCenter.current().delegate = self
+        }
         if identity.shareLocation {
             locationManager.startUpdatingLocation()
         }
@@ -225,10 +236,19 @@ final class BluetoothMeshService: NSObject, ObservableObject {
             env.senderLongitude = loc.lon
         }
         appendLocalChat(envelope: env, text: trimmed)
-        broadcastEnvelope(env, excludeCentral: nil, excludePeripheral: nil)
+        _ = broadcastEnvelope(env, excludeCentral: nil, excludePeripheral: nil)
     }
 
-    func sendMapLabel(category: LabelCategory, lat: Double, lon: Double) {
+    /// Call from main. Returns false if on cooldown (30s); true if send was queued.
+    func sendMapLabel(category: LabelCategory, lat: Double, lon: Double) -> Bool {
+        if mapLabelCooldownRemaining > 0 {
+            log("Map label: cooldown (\(Int(mapLabelCooldownRemaining))s left)")
+            return false
+        }
+        lastMapLabelSendTime = Date()
+        mapLabelCooldownRemaining = mapLabelCooldownSeconds
+        startMapLabelCooldownTimer()
+
         let payload = MapLabelPayload(
             id: UUID(),
             category: category.rawValue,
@@ -240,7 +260,7 @@ final class BluetoothMeshService: NSObject, ObservableObject {
         )
         guard let payloadData = try? JSONEncoder().encode(payload) else {
             log("Map label: encode payload failed")
-            return
+            return false
         }
         var env = MeshEnvelope(
             id: UUID(),
@@ -265,6 +285,38 @@ final class BluetoothMeshService: NSObject, ObservableObject {
                 self?.log("Map label sent \(payload.id)")
             }
         }
+        return true
+    }
+
+    private func startMapLabelCooldownTimer() {
+        mapLabelCooldownTimer?.invalidate()
+        mapLabelCooldownTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
+            guard let self, let last = self.lastMapLabelSendTime else { return }
+            let elapsed = Date().timeIntervalSince(last)
+            let remaining = self.mapLabelCooldownSeconds - elapsed
+            if remaining <= 0 {
+                self.mapLabelCooldownRemaining = 0
+                self.mapLabelCooldownTimer?.invalidate()
+                self.mapLabelCooldownTimer = nil
+            } else {
+                self.mapLabelCooldownRemaining = remaining
+            }
+        }
+        RunLoop.main.add(mapLabelCooldownTimer!, forMode: .common)
+    }
+
+    /// Call early (e.g. from start()) so label notifications can be shown.
+    func requestNotificationPermissionForLabels() {
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { _, _ in }
+    }
+
+    private func notifyLabelReceived(categoryDisplayName: String, from senderName: String) {
+        let content = UNMutableNotificationContent()
+        content.title = "New map label"
+        content.body = "\(categoryDisplayName) from \(senderName)"
+        content.sound = .default
+        let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: UNTimeIntervalNotificationTrigger(timeInterval: 0.1, repeats: false))
+        UNUserNotificationCenter.current().add(request)
     }
 
     func voteForLabel(labelId: UUID, up: Bool) {
@@ -290,7 +342,7 @@ final class BluetoothMeshService: NSObject, ObservableObject {
             self.labelVotes[labelId]?[self.identity.deviceID] = vote
         }
         bleQueue.async { [weak self] in
-            self?.broadcastEnvelope(env, excludeCentral: nil, excludePeripheral: nil)
+            _ = self?.broadcastEnvelope(env, excludeCentral: nil, excludePeripheral: nil)
         }
     }
 
@@ -524,8 +576,15 @@ final class BluetoothMeshService: NSObject, ObservableObject {
                     senderName: env.senderName,
                     timestamp: wire.timestamp
                 )
+                let categoryDisplay = LabelCategory(rawValue: wire.category)?.displayName ?? wire.category
+                let senderName = env.senderName
+                let senderID = env.senderID
+                let isLiveBroadcast = env.ttl > 1
                 DispatchQueue.main.async { [weak self] in
                     self?.mapLabels[payload.id] = payload
+                    if let self, senderID != self.identity.deviceID, isLiveBroadcast {
+                        self.notifyLabelReceived(categoryDisplayName: categoryDisplay, from: senderName)
+                    }
                 }
                 log("Map label received \(payload.id) from \(env.senderName)")
             } else {
@@ -553,7 +612,7 @@ final class BluetoothMeshService: NSObject, ObservableObject {
             relay.ttl = env.ttl - 1
             let delay = TimeInterval(Double.random(in: 0.05...0.15))
             bleQueue.asyncAfter(deadline: .now() + delay) { [weak self] in
-                self?.broadcastEnvelope(relay, excludeCentral: sourceCentral, excludePeripheral: sourcePeripheral)
+                _ = self?.broadcastEnvelope(relay, excludeCentral: sourceCentral, excludePeripheral: sourcePeripheral)
             }
         }
     }
@@ -625,6 +684,13 @@ final class BluetoothMeshService: NSObject, ObservableObject {
                 _ = peripheral.updateValue(data, for: char, onSubscribedCentrals: nil)
             }
         }
+    }
+
+    /// Send a single envelope only to the given centrals (e.g. push labels to a new subscriber).
+    private func broadcastEnvelopeToCentrals(_ envelope: MeshEnvelope, centrals: [CBCentral]) {
+        guard let data = MeshEnvelope.encodeJSON(envelope), data.count <= 512 else { return }
+        guard let char = meshCharacteristic, !centrals.isEmpty else { return }
+        _ = peripheral.updateValue(data, for: char, onSubscribedCentrals: centrals)
     }
 
     private func sendAnnounce(to centrals: [CBCentral]? = nil) {
@@ -859,6 +925,33 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
         }
         log("Central subscribed (\(subscribedCentrals.count))")
         sendAnnounce(to: [central])
+        pushMapLabelsToCentral(central)
+    }
+
+    /// Push our known map labels to a newly subscribed central so they see existing labels.
+    private func pushMapLabelsToCentral(_ central: CBCentral) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            let labels = Array(self.mapLabels.values).suffix(50)
+            for (index, payload) in labels.enumerated() {
+                guard let payloadData = try? JSONEncoder().encode(payload) else { continue }
+                var env = MeshEnvelope(
+                    id: UUID(),
+                    type: .mapLabel,
+                    senderID: payload.senderID,
+                    senderName: payload.senderName,
+                    timestamp: payload.timestamp,
+                    ttl: 1,
+                    payload: payloadData,
+                    senderLatitude: nil,
+                    senderLongitude: nil
+                )
+                let delay = Double(index) * 0.12
+                self.bleQueue.asyncAfter(deadline: .now() + delay) { [weak self] in
+                    self?.broadcastEnvelopeToCentrals(env, centrals: [central])
+                }
+            }
+        }
     }
 
     func peripheralManager(_ peripheral: CBPeripheralManager, central: CBCentral, didUnsubscribeFrom characteristic: CBCharacteristic) {
@@ -901,5 +994,18 @@ extension BluetoothMeshService: CLLocationManagerDelegate {
         default:
             break
         }
+    }
+}
+
+// MARK: - UNUserNotificationCenterDelegate
+
+extension BluetoothMeshService: UNUserNotificationCenterDelegate {
+    /// Show label notifications even when the app is in the foreground.
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification,
+        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+    ) {
+        completionHandler([.banner, .list, .sound, .badge])
     }
 }
