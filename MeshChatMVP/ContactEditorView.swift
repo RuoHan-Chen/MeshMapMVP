@@ -6,11 +6,25 @@ struct ContactEditorView: View {
     let publicKey: Data
     var existing: SavedContact?
     var onSave: () -> Void
+    /// Called after a successful delete (e.g. bump contacts list).
+    var onDelete: (() -> Void)?
 
     @State private var nickname: String = ""
     @State private var relationship: String = SavedContact.associate
+    @State private var confirmDelete = false
 
     private var fingerprint: String { KeyManager.fingerprint(publicKey, length: 8) }
+    init(
+        publicKey: Data,
+        existing: SavedContact?,
+        onSave: @escaping () -> Void,
+        onDelete: (() -> Void)? = nil
+    ) {
+        self.publicKey = publicKey
+        self.existing = existing
+        self.onSave = onSave
+        self.onDelete = onDelete
+    }
 
     var body: some View {
         NavigationStack {
@@ -18,7 +32,7 @@ struct ContactEditorView: View {
                 Section("Public key") {
                     Text(fingerprint)
                         .font(.system(.body, design: .monospaced))
-                    Text("\(publicKey.count) bytes · tap Save to store")
+                    Text("\(publicKey.count) bytes · cannot change")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -31,6 +45,18 @@ struct ContactEditorView: View {
                         Text("Friend").tag(SavedContact.friend)
                     }
                     .pickerStyle(.segmented)
+                }
+                if existing != nil {
+                    Section {
+                        Button(role: .destructive) {
+                            confirmDelete = true
+                        } label: {
+                            Label("Delete contact", systemImage: "trash")
+                        }
+                    } footer: {
+                        Text("Removes them from your contacts. Group and DM history stay on device until you clear app data.")
+                            .font(.caption)
+                    }
                 }
             }
             .navigationTitle(existing == nil ? "Add contact" : "Edit contact")
@@ -49,6 +75,12 @@ struct ContactEditorView: View {
                     nickname = e.nickname
                     relationship = e.relationship
                 }
+            }
+            .confirmationDialog("Delete this contact?", isPresented: $confirmDelete, titleVisibility: .visible) {
+                Button("Delete", role: .destructive) { deleteContact() }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("You can add them again later from Dashboard or chat.")
             }
         }
     }
@@ -83,6 +115,21 @@ struct ContactEditorView: View {
             dismiss()
         } catch {
             // ignore for MVP
+        }
+    }
+
+    private func deleteContact() {
+        guard let e = existing ?? (try? DatabaseManager.shared.findContactByPublicKey(publicKey)) else {
+            dismiss()
+            return
+        }
+        do {
+            try DatabaseManager.shared.deleteContact(e)
+            onDelete?()
+            onSave()
+            dismiss()
+        } catch {
+            dismiss()
         }
     }
 }

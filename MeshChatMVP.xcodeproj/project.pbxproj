@@ -35,6 +35,7 @@
 		A1000029 /* SavedContact.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000029 /* SavedContact.swift */; };
 		A100002A /* ContactEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200002A /* ContactEditorView.swift */; };
 		A100002B /* ContactsListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200002B /* ContactsListView.swift */; };
+		A100002C /* PrivateChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200002C /* PrivateChatView.swift */; };
 		D974FBAF2F651AD7008F4874 /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = D974FBAE2F651AD7008F4874 /* GRDB */; };
 /* End PBXBuildFile section */
 
@@ -68,6 +69,7 @@
 		A2000029 /* SavedContact.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavedContact.swift; sourceTree = "<group>"; };
 		A200002A /* ContactEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactEditorView.swift; sourceTree = "<group>"; };
 		A200002B /* ContactsListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactsListView.swift; sourceTree = "<group>"; };
+		A200002C /* PrivateChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrivateChatView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -120,6 +122,7 @@
 				A2000029 /* SavedContact.swift */,
 				A200002A /* ContactEditorView.swift */,
 				A200002B /* ContactsListView.swift */,
+				A200002C /* PrivateChatView.swift */,
 				A200000A /* Assets.xcassets */,
 			);
 			path = MeshChatMVP;
@@ -232,6 +235,7 @@
 				A1000029 /* SavedContact.swift in Sources */,
 				A100002A /* ContactEditorView.swift in Sources */,
 				A100002B /* ContactsListView.swift in Sources */,
+				A100002C /* PrivateChatView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

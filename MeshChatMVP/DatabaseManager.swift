@@ -145,6 +145,10 @@ extension DatabaseManager {
             try c.update(db)
         }
     }
+
+    func deleteContact(_ c: SavedContact) throws {
+        try dbQueue.write { db in try c.delete(db) }
+    }
 }
 
 // MARK: - Contacts (GRDB MeshContact)
@@ -204,6 +208,17 @@ extension DatabaseManager {
                 .order(Column("timestamp").asc)
                 .limit(limit)
                 .fetchAll(db)
+        }
+    }
+
+    /// Remove DM rows older than `maxAgeSeconds` (channel prefix `dm:`).
+    func pruneDMMessages(olderThanSeconds maxAgeSeconds: Int64) throws {
+        let cutoff = Int64(Date().timeIntervalSince1970) - maxAgeSeconds
+        try dbQueue.write { db in
+            try db.execute(
+                sql: "DELETE FROM messages WHERE channel LIKE ? AND receivedAt < ?",
+                arguments: ["dm:%", cutoff]
+            )
         }
     }
 }

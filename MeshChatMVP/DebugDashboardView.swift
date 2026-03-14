@@ -80,12 +80,16 @@ struct DebugDashboardView: View {
             }
             .navigationTitle("Dashboard")
             .sheet(item: $editorPeer) { peer in
+                let pk = peer.publicKey!
+                let pid = DatabaseManager.canonicalSenderID(publicKey: pk)
                 ContactEditorView(
-                    publicKey: peer.publicKey!,
-                    existing: try? DatabaseManager.shared.findContactByPublicKey(peer.publicKey!)
-                ) {
-                    mesh.contactsVersion = UUID()
-                }
+                    publicKey: pk,
+                    existing: try? DatabaseManager.shared.findContactByPublicKey(pk),
+                    onSave: { mesh.contactsVersion = UUID() },
+                    onDelete: {
+                        mesh.removeContactActivity(peerID: pid)
+                    }
+                )
             }
         }
     }

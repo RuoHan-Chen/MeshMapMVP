@@ -16,6 +16,7 @@ struct ContentView: View {
                 .tabItem { Label("Dashboard", systemImage: "square.grid.2x2") }
 
             ContactsListView()
+                .environmentObject(mesh)
                 .tabItem { Label("Contacts", systemImage: "person.2") }
 
             ProfileView()

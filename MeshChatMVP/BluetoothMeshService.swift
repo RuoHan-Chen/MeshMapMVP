@@ -19,6 +19,13 @@ struct DiscoveredPeer: Identifiable, Equatable, Hashable {
     var lastSeen: Int64
 }
 
+/// Per saved-contact preview + unread (key = peer mesh id).
+struct ContactActivityState: Codable, Equatable {
+    var lastText: String
+    var lastDate: TimeInterval
+    var unread: Int
+}
+
 /// One row for the debug dashboard.
 struct MeshDebugConnectionRow: Identifiable, Equatable {
     let id: UUID
@@ -34,6 +41,8 @@ final class BluetoothMeshService: NSObject, ObservableObject {
     @Published private(set) var connectedPeerNames: [String] = []
     @Published private(set) var debugConnectionRows: [MeshDebugConnectionRow] = []
     @Published var chatMessages: [ChatMessage] = []
+    /// Direct thread with one peer (key = their `senderID` / deviceID).
+    @Published private(set) var directThreadMessages: [String: [ChatMessage]] = [:]
     @Published var debugLines: [String] = []
     @Published var identity: DeviceIdentity
     @Published var announceNicknames: [String: String] = [:]
@@ -63,6 +72,185 @@ final class BluetoothMeshService: NSObject, ObservableObject {
 
     @Published private(set) var subscribedCentralCount: Int = 0
     @Published private(set) var readyRemoteCount: Int = 0
+
+    /// Saved contacts only: last line + unread (persisted).
+    @Published private(set) var contactActivity: [String: ContactActivityState] = [:]
+    /// Bumps when any contact activity/unread changes (refresh Chat + Contacts rows).
+    @Published private(set) var contactActivityRevision = 0
+    private static let contactActivityDefaultsKey = "meshchat.contactActivity.v1"
+
+    var contactUnreadTotal: Int { contactActivity.values.reduce(0) { $0 + $1.unread } }
+
+    func activity(forPeerID peerID: String) -> ContactActivityState? { contactActivity[peerID] }
+
+    /// True if `peerID` matches a row in saved_contacts.
+    func isSavedContactPeer(_ peerID: String) -> Bool {
+        guard let pk = KeyManager.decodePublicKeyBase64(peerID) else { return false }
+        return (try? DatabaseManager.shared.findContactByPublicKey(pk)) != nil
+    }
+
+    /// After deleting a saved contact, drop activity preview/unread for that peer.
+    func removeContactActivity(peerID: String) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            var copy = self.contactActivity
+            copy.removeValue(forKey: peerID)
+            self.contactActivity = copy
+            self.contactActivityRevision += 1
+            self.persistContactActivity()
+        }
+    }
+
+    func markContactThreadRead(peerID: String) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            var copy = self.contactActivity
+            var m = copy[peerID] ?? ContactActivityState(lastText: "", lastDate: 0, unread: 0)
+            m.unread = 0
+            copy[peerID] = m
+            self.contactActivity = copy
+            self.contactActivityRevision += 1
+            self.persistContactActivity()
+        }
+    }
+
+    private func recordContactInbound(peerID: String, preview: String, incrementUnread: Bool) {
+        guard isSavedContactPeer(peerID) else { return }
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            var copy = self.contactActivity
+            var m = copy[peerID] ?? ContactActivityState(lastText: "", lastDate: 0, unread: 0)
+            m.lastText = String(preview.prefix(120))
+            m.lastDate = Date().timeIntervalSince1970
+            if incrementUnread { m.unread += 1 }
+            copy[peerID] = m
+            self.contactActivity = copy
+            self.contactActivityRevision += 1
+            self.persistContactActivity()
+        }
+    }
+
+    private func recordContactOutboundDM(peerID: String, preview: String) {
+        guard isSavedContactPeer(peerID) else { return }
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            var copy = self.contactActivity
+            var m = copy[peerID] ?? ContactActivityState(lastText: "", lastDate: 0, unread: 0)
+            m.lastText = String(preview.prefix(120))
+            m.lastDate = Date().timeIntervalSince1970
+            copy[peerID] = m
+            self.contactActivity = copy
+            self.contactActivityRevision += 1
+            self.persistContactActivity()
+        }
+    }
+
+    private func loadContactActivityFromDefaults() {
+        guard let data = UserDefaults.standard.data(forKey: Self.contactActivityDefaultsKey),
+              let decoded = try? JSONDecoder().decode([String: ContactActivityState].self, from: data)
+        else { return }
+        DispatchQueue.main.async { [weak self] in
+            self?.contactActivity = decoded
+            self?.contactActivityRevision += 1
+        }
+    }
+
+    private func persistContactActivity() {
+        if let data = try? JSONEncoder().encode(contactActivity) {
+            UserDefaults.standard.set(data, forKey: Self.contactActivityDefaultsKey)
+        }
+    }
+
+    /// Stable DB channel id for DM between two mesh ids.
+    static func dmChannelId(myID: String, peerID: String) -> String {
+        "dm:" + [myID, peerID].sorted().joined(separator: "|")
+    }
+
+    /// Load persisted DM with `peerID` into `directThreadMessages`.
+    func loadDirectThread(peerID: String) {
+        try? DatabaseManager.shared.pruneDMMessages(olderThanSeconds: Int64(Self.dmDataTTLSeconds))
+        let ch = Self.dmChannelId(myID: identity.deviceID, peerID: peerID)
+        let myID = identity.deviceID
+        guard let persisted = try? DatabaseManager.shared.messages(channel: ch, limit: 200) else { return }
+        let cutoff = Date().addingTimeInterval(-Self.dmDataTTLSeconds)
+        let loaded = persisted.compactMap { m -> ChatMessage? in
+            let msg = m.toChatMessage(isLocal: m.senderID == myID)
+            return msg.date >= cutoff ? msg : nil
+        }
+        DispatchQueue.main.async { [weak self] in
+            self?.directThreadMessages[peerID] = loaded
+        }
+    }
+
+    /// Drop in-memory DM lines older than TTL (all threads).
+    private func pruneDirectThreadsInMemory() {
+        let cutoff = Date().addingTimeInterval(-Self.dmDataTTLSeconds)
+        var copy = directThreadMessages
+        for (k, arr) in copy {
+            let kept = arr.filter { $0.date >= cutoff }
+            if kept.isEmpty { copy.removeValue(forKey: k) } else { copy[k] = kept }
+        }
+        directThreadMessages = copy
+    }
+
+    func sendDirectChat(text: String, toPeerID: String, peerDisplayName: String) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, toPeerID != identity.deviceID else { return }
+        let payload: ChatPayload = ChatPayload(text: trimmed, recipientID: toPeerID)
+        guard let payloadData = try? JSONEncoder().encode(payload) else { return }
+        var env = MeshEnvelope(
+            id: UUID(),
+            type: .message,
+            senderID: identity.deviceID,
+            senderName: identity.nickname,
+            timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+            ttl: defaultTTL,
+            payload: payloadData,
+            senderLatitude: nil,
+            senderLongitude: nil
+        )
+        if identity.shareLocation, let loc = lastKnownLocation {
+            env.senderLatitude = loc.lat
+            env.senderLongitude = loc.lon
+        }
+        let ch = Self.dmChannelId(myID: identity.deviceID, peerID: toPeerID)
+        let persisted = PersistedMessage(
+            id: env.id.uuidString,
+            senderID: env.senderID,
+            senderName: env.senderName,
+            text: trimmed,
+            timestamp: Int64(env.timestamp),
+            channel: ch,
+            receivedAt: Int64(Date().timeIntervalSince1970)
+        )
+        try? DatabaseManager.shared.saveMessage(persisted)
+        try? DatabaseManager.shared.pruneDMMessages(olderThanSeconds: Int64(Self.dmDataTTLSeconds))
+        let envCopy = env
+        let textCopy = trimmed
+        bleQueue.async { [weak self] in
+            guard let self else { return }
+            _ = self.markSeen(envCopy.id)
+            _ = self.broadcastEnvelope(envCopy, excludeCentral: nil, excludePeripheral: nil)
+        }
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.pruneDirectThreadsInMemory()
+            var arr = self.directThreadMessages[toPeerID] ?? []
+            arr.append(ChatMessage(
+                id: UUID(),
+                envelopeId: envCopy.id,
+                senderID: envCopy.senderID,
+                senderName: envCopy.senderName,
+                text: textCopy,
+                date: Date(),
+                isLocal: true,
+                distanceFromMe: nil,
+                imageJPEGBase64: nil
+            ))
+            self.directThreadMessages[toPeerID] = arr
+            self.recordContactOutboundDM(peerID: toPeerID, preview: textCopy)
+        }
+    }
 
     /// Group chat label: saved contact nickname if we know this sender's key; else announce / envelope name.
     func senderDisplayName(senderID: String, fallbackSenderName: String) -> String {
@@ -108,6 +296,8 @@ final class BluetoothMeshService: NSObject, ObservableObject {
     private var bleScanIdle: Double = 40
 
     private let defaultTTL: UInt8 = 5
+    /// DM payloads older than this are not stored, shown, or relayed (20 minutes).
+    static let dmDataTTLSeconds: TimeInterval = 20 * 60
     /// Max JSON size per BLE write (mesh policy).
     static let meshEnvelopeMaxBytes = 512
     /// Raw JPEG bytes per `ImageChunkPayload` (whole mesh packet must stay ≤ `meshEnvelopeMaxBytes`).
@@ -173,6 +363,7 @@ final class BluetoothMeshService: NSObject, ObservableObject {
             locationManager.startUpdatingLocation()
         }
         loadPersistedMessages()
+        loadContactActivityFromDefaults()
         bleQueue.async { [weak self] in
             self?.setupPeripheralIfPowered()
             self?.scheduleScanCycle()
@@ -682,6 +873,8 @@ final class BluetoothMeshService: NSObject, ObservableObject {
         DispatchQueue.main.async { [weak self] in
             self?.pruneTimer = Timer.scheduledTimer(withTimeInterval: 120, repeats: true) { [weak self] _ in
                 self?.pruneOldDedup()
+                try? DatabaseManager.shared.pruneDMMessages(olderThanSeconds: Int64(BluetoothMeshService.dmDataTTLSeconds))
+                DispatchQueue.main.async { self?.pruneDirectThreadsInMemory() }
             }
         }
     }
@@ -739,6 +932,17 @@ final class BluetoothMeshService: NSObject, ObservableObject {
             log("Drop dedup \(env.id)")
             return
         }
+        /// DM envelopes older than TTL are not stored, shown, or forwarded.
+        var dmPastTTL = false
+        if env.type == .message,
+           let chat = try? JSONDecoder().decode(ChatPayload.self, from: env.payload),
+           chat.recipientID != nil {
+            let ageMs = Date().timeIntervalSince1970 * 1000 - Double(env.timestamp)
+            dmPastTTL = ageMs > Self.dmDataTTLSeconds * 1000
+            if dmPastTTL {
+                log("Drop DM past \(Int(Self.dmDataTTLSeconds))s ttl")
+            }
+        }
         // Always upsert the sender as a contact
         try? DatabaseManager.shared.upsertContact(id: env.senderID, nickname: env.senderName)
 
@@ -769,35 +973,78 @@ final class BluetoothMeshService: NSObject, ObservableObject {
         case .message:
             if let chat = try? JSONDecoder().decode(ChatPayload.self, from: env.payload) {
                 let envCopy = env
-                let persisted = PersistedMessage(
-                    id: env.id.uuidString,
-                    senderID: env.senderID,
-                    senderName: env.senderName,
-                    text: chat.text,
-                    timestamp: Int64(env.timestamp),
-                    channel: "broadcast",
-                    receivedAt: Int64(Date().timeIntervalSince1970)
-                )
-                try? DatabaseManager.shared.saveMessage(persisted)
-                let skipAppend = envCopy.senderID == identity.deviceID
-                if !skipAppend {
-                    DispatchQueue.main.async { [weak self] in
-                        guard let self else { return }
-                        let distance = self.distanceFromMe(senderID: envCopy.senderID)
-                        self.appendChatMessage(
-                            ChatMessage(
-                                id: UUID(),
-                                envelopeId: envCopy.id,
-                                senderID: envCopy.senderID,
-                                senderName: envCopy.senderName,
-                                text: chat.text,
-                                date: Date(),
-                                isLocal: false,
-                                distanceFromMe: distance,
-                                imageJPEGBase64: nil
-                            )
+                let me = identity.deviceID
+                if let recipient = chat.recipientID {
+                    if dmPastTTL { break }
+                    let involved = recipient == me || envCopy.senderID == me
+                    if involved {
+                        let otherPeer = envCopy.senderID == me ? recipient : envCopy.senderID
+                        let ch = Self.dmChannelId(myID: me, peerID: otherPeer)
+                        let persisted = PersistedMessage(
+                            id: env.id.uuidString,
+                            senderID: env.senderID,
+                            senderName: env.senderName,
+                            text: chat.text,
+                            timestamp: Int64(env.timestamp),
+                            channel: ch,
+                            receivedAt: Int64(Date().timeIntervalSince1970)
                         )
-                        self.notifyIncomingIfNeeded(sender: envCopy.senderName, text: chat.text)
+                        try? DatabaseManager.shared.saveMessage(persisted)
+                        try? DatabaseManager.shared.pruneDMMessages(olderThanSeconds: Int64(Self.dmDataTTLSeconds))
+                        if envCopy.senderID != me {
+                            DispatchQueue.main.async { [weak self] in
+                                guard let self else { return }
+                                self.pruneDirectThreadsInMemory()
+                                var arr = self.directThreadMessages[otherPeer] ?? []
+                                arr.append(ChatMessage(
+                                    id: UUID(),
+                                    envelopeId: envCopy.id,
+                                    senderID: envCopy.senderID,
+                                    senderName: envCopy.senderName,
+                                    text: chat.text,
+                                    date: Date(),
+                                    isLocal: false,
+                                    distanceFromMe: self.distanceFromMe(senderID: envCopy.senderID),
+                                    imageJPEGBase64: nil
+                                ))
+                                self.directThreadMessages[otherPeer] = arr
+                                self.recordContactInbound(peerID: otherPeer, preview: chat.text, incrementUnread: true)
+                                self.notifyIncomingIfNeeded(sender: envCopy.senderName, text: chat.text)
+                            }
+                        }
+                    }
+                } else {
+                    let persisted = PersistedMessage(
+                        id: env.id.uuidString,
+                        senderID: env.senderID,
+                        senderName: env.senderName,
+                        text: chat.text,
+                        timestamp: Int64(env.timestamp),
+                        channel: "broadcast",
+                        receivedAt: Int64(Date().timeIntervalSince1970)
+                    )
+                    try? DatabaseManager.shared.saveMessage(persisted)
+                    let skipAppend = envCopy.senderID == me
+                    if !skipAppend {
+                        DispatchQueue.main.async { [weak self] in
+                            guard let self else { return }
+                            let distance = self.distanceFromMe(senderID: envCopy.senderID)
+                            self.appendChatMessage(
+                                ChatMessage(
+                                    id: UUID(),
+                                    envelopeId: envCopy.id,
+                                    senderID: envCopy.senderID,
+                                    senderName: envCopy.senderName,
+                                    text: chat.text,
+                                    date: Date(),
+                                    isLocal: false,
+                                    distanceFromMe: distance,
+                                    imageJPEGBase64: nil
+                                )
+                            )
+                            self.notifyIncomingIfNeeded(sender: envCopy.senderName, text: chat.text)
+                            self.recordContactInbound(peerID: envCopy.senderID, preview: chat.text, incrementUnread: true)
+                        }
                     }
                 }
             }
@@ -887,7 +1134,7 @@ final class BluetoothMeshService: NSObject, ObservableObject {
             }
             try? DatabaseManager.shared.recordSighting(nodeID: env.senderID, lat: lat, lon: lon, rssi: 0)
         }
-        if env.ttl > 1, env.type != .requestMapLabels {
+        if env.ttl > 1, env.type != .requestMapLabels, !dmPastTTL {
             var relay = env
             relay.ttl = env.ttl - 1
             let delay = TimeInterval(Double.random(in: 0.05...0.15))
@@ -961,6 +1208,7 @@ final class BluetoothMeshService: NSObject, ObservableObject {
             )
         )
         notifyIncomingIfNeeded(sender: env.senderName, text: "[Photo]")
+        recordContactInbound(peerID: env.senderID, preview: "[Photo]", incrementUnread: true)
     }
 
     private func appendChatMessage(_ m: ChatMessage) {
