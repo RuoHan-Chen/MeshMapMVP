@@ -95,6 +95,10 @@ final class BluetoothMeshService: NSObject, ObservableObject {
     private let mapLabelCooldownSeconds: TimeInterval = 30
     private var lastMapLabelSendTime: Date?
     private var mapLabelCooldownTimer: Timer?
+    /// Locally ignored label IDs (user chose to hide these events). Backed by UserDefaults.
+    private var ignoredLabelIds: Set<UUID> = []
+    private let ignoredLabelsDefaultsKey = "meshchat.ignoredLabelIds"
+    private let maxIgnoredLabels = 500
 
     override init() {
         identity = DeviceIdentity.load()
@@ -106,6 +110,7 @@ final class BluetoothMeshService: NSObject, ObservableObject {
         locationManager.delegate = self
         locationManager.desiredAccuracy = kCLLocationAccuracyHundredMeters
         locationManager.requestWhenInUseAuthorization()
+        loadIgnoredLabels()
         startPruneTimer()
     }
 
@@ -342,8 +347,10 @@ final class BluetoothMeshService: NSObject, ObservableObject {
     /// Remove a map label from local storage only (no wire delete). Call from main.
     func removeMapLabel(id: UUID) {
         DispatchQueue.main.async { [weak self] in
-            self?.mapLabels.removeValue(forKey: id)
-            self?.labelVotes.removeValue(forKey: id)
+            guard let self else { return }
+            self.mapLabels.removeValue(forKey: id)
+            self.labelVotes.removeValue(forKey: id)
+            self.markLabelIgnored(id)
         }
     }
 
@@ -395,6 +402,8 @@ final class BluetoothMeshService: NSObject, ObservableObject {
         DispatchQueue.main.async { [weak self] in
             self?.mapLabels.removeAll()
             self?.labelVotes.removeAll()
+            self?.ignoredLabelIds.removeAll()
+            self?.saveIgnoredLabels()
         }
     }
 
@@ -540,6 +549,31 @@ final class BluetoothMeshService: NSObject, ObservableObject {
         }
     }
 
+    // MARK: - Ignored labels (local hide)
+
+    private func loadIgnoredLabels() {
+        let defaults = UserDefaults.standard
+        if let data = defaults.data(forKey: ignoredLabelsDefaultsKey),
+           let ids = try? JSONDecoder().decode([UUID].self, from: data) {
+            ignoredLabelIds = Set(ids.prefix(maxIgnoredLabels))
+        }
+    }
+
+    private func saveIgnoredLabels() {
+        let trimmed = Array(ignoredLabelIds.prefix(maxIgnoredLabels))
+        if let data = try? JSONEncoder().encode(trimmed) {
+            UserDefaults.standard.set(data, forKey: ignoredLabelsDefaultsKey)
+        }
+    }
+
+    private func markLabelIgnored(_ id: UUID) {
+        ignoredLabelIds.insert(id)
+        if ignoredLabelIds.count > maxIgnoredLabels {
+            ignoredLabelIds = Set(ignoredLabelIds.prefix(maxIgnoredLabels))
+        }
+        saveIgnoredLabels()
+    }
+
     // MARK: - Send / relay
 
     /// Returns true if the envelope was sent (under size limit and encoded).
@@ -613,6 +647,11 @@ final class BluetoothMeshService: NSObject, ObservableObject {
             }
         case .mapLabel:
             if let wire = try? JSONDecoder().decode(MapLabelPayload.self, from: env.payload) {
+                // If this label is locally ignored, drop it.
+                if ignoredLabelIds.contains(wire.id) {
+                    log("Map label ignored locally \(wire.id)")
+                    break
+                }
                 let payload = MapLabelPayload(
                     id: wire.id,
                     category: wire.category,
@@ -1007,7 +1046,9 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
     private func pushMapLabelsToCentral(_ central: CBCentral) {
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
-            let labels = Array(self.mapLabels.values).suffix(50)
+            let labels = Array(self.mapLabels.values)
+                .filter { !self.ignoredLabelIds.contains($0.id) }
+                .suffix(50)
             for (index, payload) in labels.enumerated() {
                 guard let payloadData = try? JSONEncoder().encode(payload) else { continue }
                 var env = MeshEnvelope(
