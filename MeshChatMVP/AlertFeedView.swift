@@ -1,5 +1,8 @@
 import SwiftUI
 
+// Disambiguate our Alert model from SwiftUI.Alert.
+private typealias MeshAlert = Alert
+
 struct AlertFeedView: View {
     @EnvironmentObject var mesh: BluetoothMeshService
 
@@ -183,7 +186,7 @@ private struct AlertClusterRow: View {
 
     // MARK: Helpers
 
-    private func alertIcon(for type: Alert.AlertType) -> some View {
+    private func alertIcon(for type: MeshAlert.AlertType) -> some View {
         let (name, color): (String, Color) = {
             switch type {
             case .hazard: return ("exclamationmark.triangle.fill", .red)
@@ -206,7 +209,7 @@ private struct AlertClusterRow: View {
             .clipShape(Capsule())
     }
 
-    private func typeName(_ type: Alert.AlertType) -> String {
+    private func typeName(_ type: MeshAlert.AlertType) -> String {
         switch type {
         case .hazard: return "Hazard"
         case .aid:    return "Aid"
