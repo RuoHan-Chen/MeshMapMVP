@@ -1,6 +1,8 @@
 import SwiftUI
 import MapKit
 import CoreLocation
+import PhotosUI
+import UIKit
 
 /// Map tab: shows positions of transmitters using existing coordinate exchange data.
 /// Reads only from mesh.lastKnownLocation, mesh.senderCoordinates, mesh.announceNicknames, mesh.identity.
@@ -284,15 +286,27 @@ struct MapTabView: View {
                 OfflineMapSheet(isCaching: $isCaching, region: region, onCache: cacheCurrentRegion)
             }
             .sheet(isPresented: $showAddLabelSheet) {
-                AddLabelSheet(regionCenter: region.center, eventTypesConfig: eventTypesManager.config) { category, customName, customDescription, iconName in
-                    _ = mesh.sendMapLabel(
-                        category: category,
-                        lat: region.center.latitude,
-                        lon: region.center.longitude,
-                        customLabelName: customName,
-                        customDescription: customDescription,
-                        customSystemImage: iconName
-                    )
+                AddLabelSheet(regionCenter: region.center, eventTypesConfig: eventTypesManager.config) { category, customName, customDescription, iconName, thumbnailData in
+                    if let data = thumbnailData {
+                        _ = mesh.sendMapLabelWithThumbnail(
+                            category: category,
+                            lat: region.center.latitude,
+                            lon: region.center.longitude,
+                            customLabelName: customName,
+                            customDescription: customDescription,
+                            customSystemImage: iconName,
+                            jpegData: data
+                        )
+                    } else {
+                        _ = mesh.sendMapLabel(
+                            category: category,
+                            lat: region.center.latitude,
+                            lon: region.center.longitude,
+                            customLabelName: customName,
+                            customDescription: customDescription,
+                            customSystemImage: iconName
+                        )
+                    }
                     showAddLabelSheet = false
                 } onCancel: {
                     showAddLabelSheet = false
@@ -497,13 +511,15 @@ extension LocationHeadingProvider: CLLocationManagerDelegate {
 private struct AddLabelSheet: View {
     let regionCenter: CLLocationCoordinate2D
     let eventTypesConfig: EventTypesConfig
-    let onSelect: (LabelCategory, String?, String?, String?) -> Void
+    let onSelect: (LabelCategory, String?, String?, String?, Data?) -> Void
     let onCancel: () -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var customName = ""
     @State private var customDescription = ""
     @State private var selectedCategory: LabelCategory?
     @State private var selectedIcon: String?
+    @State private var selectedPhotoItem: PhotosPickerItem?
+    @State private var selectedThumbnailData: Data?
 
     private func displayName(for category: LabelCategory) -> String {
         switch category {
@@ -577,6 +593,24 @@ private struct AddLabelSheet: View {
                         TextField("Description", text: $customDescription, axis: .vertical)
                             .lineLimit(2...4)
                     }
+                    Section("Photo (optional)") {
+                        VStack(alignment: .leading, spacing: 8) {
+                            PhotosPicker(selection: $selectedPhotoItem, matching: .images) {
+                                Label(selectedThumbnailData == nil ? "Add photo" : "Change photo", systemImage: "photo")
+                            }
+                            if let data = selectedThumbnailData, let image = UIImage(data: data) {
+                                Image(uiImage: image)
+                                    .resizable()
+                                    .scaledToFit()
+                                    .frame(maxHeight: 120)
+                                    .cornerRadius(8)
+                            } else {
+                                Text("Small, low‑res image for situational awareness.")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
                 }
             }
             .navigationTitle("Add label")
@@ -595,14 +629,43 @@ private struct AddLabelSheet: View {
                             cat,
                             customName.isEmpty ? nil : customName,
                             customDescription.isEmpty ? nil : customDescription,
-                            selectedIcon
+                            selectedIcon,
+                            selectedThumbnailData
                         )
                         dismiss()
                     }
                     .disabled(selectedCategory == nil)
                 }
             }
+            .onChange(of: selectedPhotoItem) { newItem in
+                guard let item = newItem else { return }
+                Task {
+                    if let data = try? await item.loadTransferable(type: Data.self),
+                       let thumb = prepareThumbnailData(from: data) {
+                        await MainActor.run {
+                            self.selectedThumbnailData = thumb
+                        }
+                    }
+                }
+            }
         }
+    }
+
+    /// Downscale and compress to a small JPEG thumbnail suitable for mesh transfer.
+    private func prepareThumbnailData(from data: Data) -> Data? {
+        guard let image = UIImage(data: data) else { return nil }
+        let maxDimension: CGFloat = 200
+        let size = image.size
+        let scale = min(maxDimension / max(size.width, size.height), 1)
+        let targetSize = CGSize(width: size.width * scale, height: size.height * scale)
+
+        UIGraphicsBeginImageContextWithOptions(targetSize, true, 1)
+        image.draw(in: CGRect(origin: .zero, size: targetSize))
+        let resized = UIGraphicsGetImageFromCurrentImageContext()
+        UIGraphicsEndImageContext()
+
+        guard let finalImage = resized else { return nil }
+        return finalImage.jpegData(compressionQuality: 0.35)
     }
 }
 
@@ -616,6 +679,7 @@ private struct LabelVoteSheet: View {
     let onDelete: () -> Void
     @Binding var selectedLabel: MapLabelRecord?
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var mesh: BluetoothMeshService
 
     var body: some View {
         NavigationStack {
@@ -623,6 +687,14 @@ private struct LabelVoteSheet: View {
                 Section {
                     Label(record.displayName, systemImage: record.category.systemImage)
                         .font(.headline)
+                    if let data = mesh.thumbnails[record.id], let image = UIImage(data: data) {
+                        Image(uiImage: image)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(maxHeight: 160)
+                            .cornerRadius(8)
+                            .padding(.vertical, 4)
+                    }
                     if let desc = record.customDescription, !desc.isEmpty {
                         Text(desc)
                             .font(.subheadline)

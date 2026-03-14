@@ -7,4 +7,6 @@ enum MessageType: UInt8, Codable, CaseIterable {
     case mapLabel = 3
     case mapLabelVote = 4
     case requestMapLabels = 5
+    /// Chunk of a thumbnail image associated with a map label.
+    case mapLabelImageChunk = 6
 }

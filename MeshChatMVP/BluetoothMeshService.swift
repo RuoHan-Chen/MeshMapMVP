@@ -44,6 +44,8 @@ final class BluetoothMeshService: NSObject, ObservableObject {
     @Published var mapLabels: [UUID: MapLabelPayload] = [:]
     /// Label votes: labelId → (voterID → 1 or -1); shared via .mapLabelVote envelopes.
     @Published var labelVotes: [UUID: [String: Int]] = [:]
+    /// In-memory thumbnail cache: labelId → compressed image data (small, capped).
+    @Published private(set) var thumbnails: [UUID: Data] = [:]
 
     /// Seconds remaining before this user can post another map label (30s cooldown).
     @Published var mapLabelCooldownRemaining: Double = 0
@@ -99,6 +101,9 @@ final class BluetoothMeshService: NSObject, ObservableObject {
     private var ignoredLabelIds: Set<UUID> = []
     private let ignoredLabelsDefaultsKey = "meshchat.ignoredLabelIds"
     private let maxIgnoredLabels = 500
+    /// Buffers for assembling incoming thumbnail chunks: imageId → buffer.
+    private var thumbnailBuffers: [UUID: ThumbnailChunkBuffer] = [:]
+    private let maxThumbnails = 20
 
     override init() {
         identity = DeviceIdentity.load()
@@ -254,7 +259,8 @@ final class BluetoothMeshService: NSObject, ObservableObject {
         lon: Double,
         customLabelName: String? = nil,
         customDescription: String? = nil,
-        customSystemImage: String? = nil
+        customSystemImage: String? = nil,
+        id explicitId: UUID? = nil
     ) -> Bool {
         if mapLabelCooldownRemaining > 0 {
             log("Map label: cooldown (\(Int(mapLabelCooldownRemaining))s left)")
@@ -271,8 +277,9 @@ final class BluetoothMeshService: NSObject, ObservableObject {
         mapLabelCooldownRemaining = mapLabelCooldownSeconds
         startMapLabelCooldownTimer()
 
+        let labelId = explicitId ?? UUID()
         let payload = MapLabelPayload(
-            id: UUID(),
+            id: labelId,
             category: category.rawValue,
             lat: lat,
             lon: lon,
@@ -311,6 +318,33 @@ final class BluetoothMeshService: NSObject, ObservableObject {
             }
         }
         return true
+    }
+
+    /// Convenience: create a label and immediately send a small thumbnail image with it.
+    @discardableResult
+    func sendMapLabelWithThumbnail(
+        category: LabelCategory,
+        lat: Double,
+        lon: Double,
+        customLabelName: String? = nil,
+        customDescription: String? = nil,
+        customSystemImage: String? = nil,
+        jpegData: Data
+    ) -> Bool {
+        let labelId = UUID()
+        let ok = sendMapLabel(
+            category: category,
+            lat: lat,
+            lon: lon,
+            customLabelName: customLabelName,
+            customDescription: customDescription,
+            customSystemImage: customSystemImage,
+            id: labelId
+        )
+        if ok {
+            sendLabelThumbnail(labelId: labelId, jpegData: jpegData)
+        }
+        return ok
     }
 
     private func startMapLabelCooldownTimer() {
@@ -549,6 +583,102 @@ final class BluetoothMeshService: NSObject, ObservableObject {
         }
     }
 
+    // MARK: - Thumbnail images (map label photos)
+
+    /// Buffer for assembling chunks of a thumbnail image.
+    private struct ThumbnailChunkBuffer {
+        let labelId: UUID
+        let total: Int
+        var chunks: [Int: Data]
+    }
+
+    /// Send a compressed thumbnail image for an existing label. jpegData should already be small.
+    func sendLabelThumbnail(labelId: UUID, jpegData: Data) {
+        // Cap total thumbnail size to avoid flooding the mesh; keep only the first ~2.5 KB.
+        let maxTotalBytes = 2_500
+        let trimmedData: Data
+        if jpegData.count > maxTotalBytes {
+            trimmedData = jpegData.prefix(maxTotalBytes)
+        } else {
+            trimmedData = jpegData
+        }
+
+        // Store locally first so the sender sees their own image immediately.
+        DispatchQueue.main.async { [weak self] in
+            self?.storeThumbnail(labelId: labelId, data: trimmedData)
+        }
+
+        let imageId = labelId
+        // Each chunk becomes base64 and wrapped in JSON + envelope; keep this very small.
+        // 80 raw bytes → ~108B base64 + JSON ≈ < 260B payload, safely under 512B envelope.
+        let maxChunkSize = 80 // raw bytes in payload.data
+        let totalChunks = Int(ceil(Double(trimmedData.count) / Double(maxChunkSize)))
+        guard totalChunks > 0 else { return }
+
+        for index in 0..<totalChunks {
+            let start = index * maxChunkSize
+            let end = min(start + maxChunkSize, trimmedData.count)
+            let slice = trimmedData[start..<end]
+            let payload = MapLabelImageChunkPayload(
+                imageId: imageId,
+                labelId: labelId,
+                index: index,
+                total: totalChunks,
+                data: Data(slice)
+            )
+            guard let payloadData = try? JSONEncoder().encode(payload) else { continue }
+            let env = MeshEnvelope(
+                id: UUID(),
+                type: .mapLabelImageChunk,
+                senderID: identity.deviceID,
+                senderName: identity.nickname,
+                timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+                ttl: defaultTTL,
+                payload: payloadData,
+                senderLatitude: nil,
+                senderLongitude: nil
+            )
+            log("Thumbnail chunk \(index + 1)/\(totalChunks) for label \(labelId) size=\(payloadData.count)B")
+            let delay = Double(index) * 0.06 // Stagger sends so receiver isn't overwhelmed
+            bleQueue.asyncAfter(deadline: .now() + delay) { [weak self] in
+                _ = self?.broadcastEnvelope(env, excludeCentral: nil, excludePeripheral: nil)
+            }
+        }
+    }
+
+    private func handleIncomingImageChunk(_ chunk: MapLabelImageChunkPayload) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            log("Thumbnail chunk rx imageId=\(chunk.imageId) labelId=\(chunk.labelId) index=\(chunk.index + 1)/\(chunk.total) size=\(chunk.data.count)B")
+            var buffer = self.thumbnailBuffers[chunk.imageId] ?? ThumbnailChunkBuffer(labelId: chunk.labelId, total: chunk.total, chunks: [:])
+            buffer.chunks[chunk.index] = chunk.data
+            self.thumbnailBuffers[chunk.imageId] = buffer
+
+            if buffer.chunks.count == buffer.total {
+                var data = Data()
+                for i in 0..<buffer.total {
+                    if let part = buffer.chunks[i] {
+                        data.append(part)
+                    } else {
+                        return // missing chunk; wait for more
+                    }
+                }
+                self.thumbnailBuffers.removeValue(forKey: chunk.imageId)
+                self.storeThumbnail(labelId: buffer.labelId, data: data)
+                log("Thumbnail complete for label \(buffer.labelId) bytes=\(data.count)")
+            }
+        }
+    }
+
+    private func storeThumbnail(labelId: UUID, data: Data) {
+        if thumbnails.count >= maxThumbnails, let firstKey = thumbnails.keys.first {
+            thumbnails.removeValue(forKey: firstKey)
+        }
+        thumbnails[labelId] = data
+        // Force SwiftUI to re-render; mutating dictionary in place may not trigger @Published.
+        objectWillChange.send()
+    }
+
     // MARK: - Ignored labels (local hide)
 
     private func loadIgnoredLabels() {
@@ -688,6 +818,10 @@ final class BluetoothMeshService: NSObject, ObservableObject {
                     }
                     self.labelVotes[payload.labelId]?[payload.voterID] = payload.vote
                 }
+            }
+        case .mapLabelImageChunk:
+            if let payload = try? JSONDecoder().decode(MapLabelImageChunkPayload.self, from: env.payload) {
+                handleIncomingImageChunk(payload)
             }
         case .requestMapLabels:
             if let central = sourceCentral {

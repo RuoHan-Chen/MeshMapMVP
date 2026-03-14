@@ -140,6 +140,28 @@ public struct MapLabelVotePayload: Codable, Equatable {
     }
 }
 
+/// Wire payload for a chunk of a small thumbnail image associated with a map label.
+/// Images are aggressively compressed thumbnails split into multiple chunks to stay under 512 bytes per envelope.
+public struct MapLabelImageChunkPayload: Codable, Equatable {
+    public let imageId: UUID      // ID of this thumbnail (usually same as labelId)
+    public let labelId: UUID      // Associated map label
+    public let index: Int         // 0-based chunk index
+    public let total: Int         // Total number of chunks
+    public let data: Data         // Raw compressed bytes for this chunk
+
+    private enum CodingKeys: String, CodingKey {
+        case imageId = "i", labelId = "l", index = "x", total = "t", data = "d"
+    }
+
+    public init(imageId: UUID, labelId: UUID, index: Int, total: Int, data: Data) {
+        self.imageId = imageId
+        self.labelId = labelId
+        self.index = index
+        self.total = total
+        self.data = data
+    }
+}
+
 /// In-memory label with vote counts for display (confidence score).
 public struct MapLabelRecord: Identifiable, Equatable {
     public let id: UUID
