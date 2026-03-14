@@ -69,6 +69,12 @@ final class DatabaseManager {
             }
         }
 
+        migrator.registerMigration("v2") { db in
+            try db.alter(table: "messages") { t in
+                t.add(column: "imageBase64", .text)
+            }
+        }
+
         try migrator.migrate(dbQueue)
     }
 }

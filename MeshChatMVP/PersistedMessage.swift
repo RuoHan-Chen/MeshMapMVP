@@ -12,6 +12,7 @@ struct PersistedMessage: Codable, FetchableRecord, PersistableRecord {
     var timestamp: Int64    // sender timestamp (ms since epoch)
     var channel: String     // "broadcast" or a DM thread id
     var receivedAt: Int64   // local unix timestamp (seconds)
+    var imageBase64: String?
 }
 
 extension PersistedMessage {
@@ -25,7 +26,8 @@ extension PersistedMessage {
             text: text,
             date: Date(timeIntervalSince1970: Double(receivedAt)),
             isLocal: isLocal,
-            distanceFromMe: distanceFromMe
+            distanceFromMe: distanceFromMe,
+            imageJPEGBase64: imageBase64
         )
     }
 }
