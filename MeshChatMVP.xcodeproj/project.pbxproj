@@ -14,6 +14,7 @@
 		A1000005 /* MessageType.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000005 /* MessageType.swift */; };
 		A1000006 /* DeviceIdentity.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000006 /* DeviceIdentity.swift */; };
 		A1000007 /* ChatPayload.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000007 /* ChatPayload.swift */; };
+		A100002D /* ChatCrypto.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200002D /* ChatCrypto.swift */; };
 		A1000008 /* AnnouncementPayload.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000008 /* AnnouncementPayload.swift */; };
 		A1000009 /* ChatMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000009 /* ChatMessage.swift */; };
 		A100000A /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A200000A /* Assets.xcassets */; };
@@ -36,6 +37,7 @@
 		A1000029 /* SavedContact.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000029 /* SavedContact.swift */; };
 		A100002A /* ContactEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200002A /* ContactEditorView.swift */; };
 		A100002B /* ContactsListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200002B /* ContactsListView.swift */; };
+		A100002C /* PrivateChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200002C /* PrivateChatView.swift */; };
 		D974FBAF2F651AD7008F4874 /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = D974FBAE2F651AD7008F4874 /* GRDB */; };
 /* End PBXBuildFile section */
 
@@ -48,6 +50,7 @@
 		A2000005 /* MessageType.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageType.swift; sourceTree = "<group>"; };
 		A2000006 /* DeviceIdentity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceIdentity.swift; sourceTree = "<group>"; };
 		A2000007 /* ChatPayload.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatPayload.swift; sourceTree = "<group>"; };
+		A200002D /* ChatCrypto.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatCrypto.swift; sourceTree = "<group>"; };
 		A2000008 /* AnnouncementPayload.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnnouncementPayload.swift; sourceTree = "<group>"; };
 		A2000009 /* ChatMessage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatMessage.swift; sourceTree = "<group>"; };
 		A200000A /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -70,6 +73,7 @@
 		A2000029 /* SavedContact.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavedContact.swift; sourceTree = "<group>"; };
 		A200002A /* ContactEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactEditorView.swift; sourceTree = "<group>"; };
 		A200002B /* ContactsListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactsListView.swift; sourceTree = "<group>"; };
+		A200002C /* PrivateChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrivateChatView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -105,6 +109,7 @@
 				A2000005 /* MessageType.swift */,
 				A2000006 /* DeviceIdentity.swift */,
 				A2000007 /* ChatPayload.swift */,
+				A200002D /* ChatCrypto.swift */,
 				A2000008 /* AnnouncementPayload.swift */,
 				A2000009 /* ChatMessage.swift */,
 				A200000F /* MapLabelModels.swift */,
@@ -123,6 +128,7 @@
 				A2000029 /* SavedContact.swift */,
 				A200002A /* ContactEditorView.swift */,
 				A200002B /* ContactsListView.swift */,
+				A200002C /* PrivateChatView.swift */,
 				A200000A /* Assets.xcassets */,
 			);
 			path = MeshChatMVP;
@@ -219,6 +225,7 @@
 				A1000005 /* MessageType.swift in Sources */,
 				A1000006 /* DeviceIdentity.swift in Sources */,
 				A1000007 /* ChatPayload.swift in Sources */,
+				A100002D /* ChatCrypto.swift in Sources */,
 				A1000008 /* AnnouncementPayload.swift in Sources */,
 				A1000009 /* ChatMessage.swift in Sources */,
 				A1000010 /* ImageChunkPayload.swift in Sources */,
@@ -236,6 +243,7 @@
 				A1000029 /* SavedContact.swift in Sources */,
 				A100002A /* ContactEditorView.swift in Sources */,
 				A100002B /* ContactsListView.swift in Sources */,
+				A100002C /* PrivateChatView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
