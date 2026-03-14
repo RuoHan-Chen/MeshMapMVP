@@ -9,6 +9,24 @@ struct ContentView: View {
             ChatView()
                 .tabItem { Label("Chat", systemImage: "bubble.left.and.bubble.right") }
 
+            AITabView()
+                .environmentObject(mesh)
+                .tabItem {
+                    Label {
+                        Text("AI")
+                    } icon: {
+                        ZStack(alignment: .topTrailing) {
+                            Image(systemName: "sparkles")
+                            if !mesh.aiConnectivityGood {
+                                Circle()
+                                    .fill(Color.red)
+                                    .frame(width: 8, height: 8)
+                                    .offset(x: 5, y: -4)
+                            }
+                        }
+                    }
+                }
+
             MapTabView()
                 .tabItem { Label("Map", systemImage: "map") }
 

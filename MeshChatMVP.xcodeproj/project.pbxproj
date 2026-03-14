@@ -37,6 +37,8 @@
 		A100002A /* ContactEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200002A /* ContactEditorView.swift */; };
 		A100002B /* ContactsListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200002B /* ContactsListView.swift */; };
 		A100002C /* PrivateChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200002C /* PrivateChatView.swift */; };
+		A100002E /* ConnectivityPayload.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200002E /* ConnectivityPayload.swift */; };
+		A100002F /* AITabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200002F /* AITabView.swift */; };
 		D974FBAF2F651AD7008F4874 /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = D974FBAE2F651AD7008F4874 /* GRDB */; };
 /* End PBXBuildFile section */
 
@@ -72,6 +74,8 @@
 		A200002A /* ContactEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactEditorView.swift; sourceTree = "<group>"; };
 		A200002B /* ContactsListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactsListView.swift; sourceTree = "<group>"; };
 		A200002C /* PrivateChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrivateChatView.swift; sourceTree = "<group>"; };
+		A200002E /* ConnectivityPayload.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectivityPayload.swift; sourceTree = "<group>"; };
+		A200002F /* AITabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AITabView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -126,6 +130,8 @@
 				A200002A /* ContactEditorView.swift */,
 				A200002B /* ContactsListView.swift */,
 				A200002C /* PrivateChatView.swift */,
+				A200002E /* ConnectivityPayload.swift */,
+				A200002F /* AITabView.swift */,
 				A200000A /* Assets.xcassets */,
 			);
 			path = MeshChatMVP;
@@ -240,6 +246,8 @@
 				A100002A /* ContactEditorView.swift in Sources */,
 				A100002B /* ContactsListView.swift in Sources */,
 				A100002C /* PrivateChatView.swift in Sources */,
+				A100002E /* ConnectivityPayload.swift in Sources */,
+				A100002F /* AITabView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

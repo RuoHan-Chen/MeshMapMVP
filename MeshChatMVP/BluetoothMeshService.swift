@@ -1,8 +1,16 @@
 import Foundation
 import CoreBluetooth
 import CoreLocation
+import Network
 import UserNotifications
 import UIKit
+
+/// Mesh-reported internet reachability for one peer (stale after ~5 min without refresh).
+struct PeerInternetRow: Equatable {
+    var hasInternet: Bool
+    var interfaceType: String?
+    var lastReceived: TimeInterval
+}
 
 // MARK: - GATT UUIDs (single service + single characteristic)
 private let kMeshServiceUUID = CBUUID(string: "6E400001-B5A3-F393-E0A9-E50E24DCCA9E")
@@ -78,6 +86,22 @@ final class BluetoothMeshService: NSObject, ObservableObject {
     /// Bumps when any contact activity/unread changes (refresh Chat + Contacts rows).
     @Published private(set) var contactActivityRevision = 0
     private static let contactActivityDefaultsKey = "meshchat.contactActivity.v1"
+
+    /// This device on WiFi/cellular (satisfied path).
+    @Published private(set) var localHasInternet = false
+    /// Peers who sent `.connectivity` recently (key = senderID).
+    @Published private(set) var peerInternetStatus: [String: PeerInternetRow] = [:]
+    static let connectivityPeerStaleSeconds: TimeInterval = 5 * 60
+    private let connectivityEnvelopeTTL: UInt8 = 3
+
+    /// AI tab red dot hidden when true: we or a fresh peer report internet.
+    var aiConnectivityGood: Bool {
+        if localHasInternet { return true }
+        let now = Date().timeIntervalSince1970
+        return peerInternetStatus.values.contains {
+            $0.hasInternet && (now - $0.lastReceived) < Self.connectivityPeerStaleSeconds
+        }
+    }
 
     var contactUnreadTotal: Int { contactActivity.values.reduce(0) { $0 + $1.unread } }
 
@@ -336,6 +360,9 @@ final class BluetoothMeshService: NSObject, ObservableObject {
     private var lastMapLabelSendTime: Date?
     private var mapLabelCooldownTimer: Timer?
 
+    private var pathMonitor: NWPathMonitor?
+    private let pathQueue = DispatchQueue(label: "meshchat.path")
+
     override init() {
         _ = KeyManager.publicKeyData
         identity = DeviceIdentity.load()
@@ -352,6 +379,7 @@ final class BluetoothMeshService: NSObject, ObservableObject {
     }
 
     deinit {
+        pathMonitor?.cancel()
         pruneTimer?.invalidate()
         scanCountdownTimer?.invalidate()
         scanIdleWorkItem?.cancel()
@@ -383,6 +411,7 @@ final class BluetoothMeshService: NSObject, ObservableObject {
         }
         loadPersistedMessages()
         loadContactActivityFromDefaults()
+        startPathMonitor()
         bleQueue.async { [weak self] in
             self?.setupPeripheralIfPowered()
             self?.scheduleScanCycle()
@@ -796,6 +825,7 @@ final class BluetoothMeshService: NSObject, ObservableObject {
         let window = bleScanWindow
         let idle = bleScanIdle
         log("Scan ON (\(window)s window)")
+        DispatchQueue.main.async { [weak self] in self?.sendConnectivityEnvelope() }
 
         DispatchQueue.main.async { [weak self] in
             self?.isScanning = true
@@ -894,6 +924,7 @@ final class BluetoothMeshService: NSObject, ObservableObject {
                 self?.pruneOldDedup()
                 try? DatabaseManager.shared.pruneDMMessages(olderThanSeconds: Int64(BluetoothMeshService.dmDataTTLSeconds))
                 DispatchQueue.main.async { self?.pruneDirectThreadsInMemory() }
+                self?.pruneStalePeerConnectivity()
             }
         }
     }
@@ -1161,6 +1192,20 @@ final class BluetoothMeshService: NSObject, ObservableObject {
                 try? DatabaseManager.shared.recomputeTrustScore(alertID: payload.alertID)
                 log("Vouch received: alertID=\(payload.alertID) value=\(payload.value) from \(env.senderName)")
             }
+        case .connectivity:
+            if let payload = try? JSONDecoder().decode(ConnectivityPayload.self, from: env.payload) {
+                let now = Date().timeIntervalSince1970
+                DispatchQueue.main.async { [weak self] in
+                    guard let self else { return }
+                    var copy = self.peerInternetStatus
+                    copy[env.senderID] = PeerInternetRow(
+                        hasInternet: payload.hasInternet,
+                        interfaceType: payload.interfaceType,
+                        lastReceived: now
+                    )
+                    self.peerInternetStatus = copy
+                }
+            }
         }
         if let lat = env.senderLatitude, let lon = env.senderLongitude {
             DispatchQueue.main.async { [weak self] in
@@ -1334,6 +1379,66 @@ final class BluetoothMeshService: NSObject, ObservableObject {
             guard let self, let env = self.buildAnnounceEnvelope() else { return }
             self.bleQueue.async { [weak self] in
                 self?.broadcastAnnounce(env, to: centrals)
+            }
+            self.sendConnectivityEnvelope()
+        }
+    }
+
+    private func startPathMonitor() {
+        let mon = NWPathMonitor()
+        pathMonitor = mon
+        mon.pathUpdateHandler = { [weak self] path in
+            let wifi = path.usesInterfaceType(.wifi)
+            let cell = path.usesInterfaceType(.cellular)
+            let wired = path.usesInterfaceType(.wiredEthernet)
+            let ok = path.status == .satisfied && (wifi || cell || wired)
+            var iface: String?
+            if wifi { iface = "wifi" }
+            else if cell { iface = "cellular" }
+            else if wired { iface = "other" }
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                self.localHasInternet = ok
+                self.sendConnectivityEnvelope(interfaceType: iface)
+            }
+        }
+        mon.start(queue: pathQueue)
+    }
+
+    /// Flood mesh with our reachability (short TTL). Call from main.
+    private func sendConnectivityEnvelope(interfaceType: String? = nil) {
+        let has = localHasInternet
+        let iface = interfaceType ?? (has ? "other" : nil)
+        let payload = ConnectivityPayload(hasInternet: has, interfaceType: has ? iface : nil)
+        guard let data = try? JSONEncoder().encode(payload) else { return }
+        var env = MeshEnvelope(
+            id: UUID(),
+            type: .connectivity,
+            senderID: identity.deviceID,
+            senderName: identity.nickname,
+            timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+            ttl: connectivityEnvelopeTTL,
+            payload: data,
+            senderLatitude: nil,
+            senderLongitude: nil
+        )
+        bleQueue.async { [weak self] in
+            guard let self else { return }
+            _ = self.markSeen(env.id)
+            _ = self.broadcastEnvelope(env, excludeCentral: nil, excludePeripheral: nil)
+        }
+    }
+
+    private func pruneStalePeerConnectivity() {
+        let now = Date().timeIntervalSince1970
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            var copy = self.peerInternetStatus
+            for (k, v) in copy where now - v.lastReceived > Self.connectivityPeerStaleSeconds {
+                copy.removeValue(forKey: k)
+            }
+            if copy.count != self.peerInternetStatus.count {
+                self.peerInternetStatus = copy
             }
         }
     }

@@ -10,4 +10,6 @@ enum MessageType: UInt8, Codable, CaseIterable {
     case imageChunk = 6
     case alert = 7
     case vouch = 8
+    /// WiFi/cellular reachability (short TTL; old clients ignore).
+    case connectivity = 9
 }
