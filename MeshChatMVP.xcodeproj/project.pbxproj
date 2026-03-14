@@ -299,7 +299,6 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 74YAK3G39Z;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = MeshChat;
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "MeshChat uses Bluetooth LE to discover nearby devices and relay messages.";
@@ -326,7 +325,6 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 74YAK3G39Z;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = MeshChat;
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "MeshChat uses Bluetooth LE to discover nearby devices and relay messages.";
