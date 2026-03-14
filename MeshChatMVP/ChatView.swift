@@ -7,14 +7,19 @@ struct ChatView: View {
     @State private var draft = ""
     @FocusState private var messageFocused: Bool
     @State private var sendCooldown = false
-    @State private var showPhotoPicker = false
     @State private var pickedItem: PhotosPickerItem?
     @State private var imageBusy = false
+    @State private var showPhotoSendInfo = false
+    /// Non-nil while chunks are going out over BLE.
+    @State private var imageSendPacketsTotal: Int?
 
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
                 statusStrip
+                if imageBusy, let total = imageSendPacketsTotal, total > 0 {
+                    sendingImageBanner(packetCount: total)
+                }
                 Divider()
                 ScrollViewReader { proxy in
                     ScrollView {
@@ -73,6 +78,13 @@ struct ChatView: View {
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
+                        showPhotoSendInfo = true
+                    } label: {
+                        Label("How photos send", systemImage: "info.circle")
+                    }
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
                         messageFocused = false
                     } label: {
                         Label("Hide keyboard", systemImage: "keyboard.chevron.compact.down")
@@ -81,31 +93,96 @@ struct ChatView: View {
                     .disabled(!messageFocused)
                 }
             }
+            .sheet(isPresented: $showPhotoSendInfo) {
+                photoSendInfoSheet
+            }
             .onChange(of: pickedItem) { newItem in
                 guard let newItem else { return }
                 imageBusy = true
+                imageSendPacketsTotal = nil
                 Task {
                     defer {
-                        Task { @MainActor in
-                            imageBusy = false
-                            pickedItem = nil
+                        if imageSendPacketsTotal == nil {
+                            Task { @MainActor in
+                                imageBusy = false
+                                pickedItem = nil
+                            }
                         }
                     }
                     guard let data = try? await newItem.loadTransferable(type: Data.self),
                           let ui = UIImage(data: data),
                           let jpeg = try? MeshImageUtils.jpegDataForMesh(from: ui)
-                    else { return }
-                    await MainActor.run {
-                        sendCooldown = true
-                        mesh.sendImage(jpegData: jpeg)
-                        messageFocused = false
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                            sendCooldown = false
+                    else {
+                        await MainActor.run {
+                            imageBusy = false
+                            pickedItem = nil
                         }
+                        return
+                    }
+                    let chunkSize = BluetoothMeshService.imageChunkByteSize
+                    let packets = (jpeg.count + chunkSize - 1) / chunkSize
+                    await MainActor.run {
+                        imageSendPacketsTotal = packets
+                        sendCooldown = true
+                        mesh.sendImage(jpegData: jpeg) { sent in
+                            imageBusy = false
+                            imageSendPacketsTotal = nil
+                            pickedItem = nil
+                            sendCooldown = false
+                            if sent == 0 {
+                                // encode failed etc.
+                            }
+                        }
+                        messageFocused = false
                     }
                 }
             }
         }
+    }
+
+    private var photoSendInfoSheet: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("How your photo is sent")
+                        .font(.title2.bold())
+                    Group {
+                        Text("Bluetooth limit — Each mesh packet can only hold about \(BluetoothMeshService.meshEnvelopeMaxBytes) bytes of JSON (BLE-friendly size). A JPEG is much larger, so the app splits it.")
+                        Text("Slices — Your image is compressed (max \(MeshImageUtils.maxJPEGBytes / 1024) KB), then cut into pieces of \(BluetoothMeshService.imageChunkByteSize) bytes each. Each piece rides in one packet with a small header (which slice, how many total, same transfer ID).")
+                        Text("Order — Packets are sent one after another over the mesh. Peers (and relays) copy them until TTL runs out. The receiver puts the slices back in order to rebuild the JPEG.")
+                        Text("Why it can feel slow — Lots of tiny packets + short pauses between them keep radios stable. Stay linked (Dashboard) for best delivery.")
+                    }
+                    .font(.body)
+                    .foregroundStyle(.primary)
+                }
+                .padding(20)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { showPhotoSendInfo = false }
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
+    }
+
+    private func sendingImageBanner(packetCount: Int) -> some View {
+        HStack(spacing: 10) {
+            ProgressView()
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Sending photo over mesh")
+                    .font(.subheadline.weight(.semibold))
+                Text("\(packetCount) packets (~\(BluetoothMeshService.imageChunkByteSize) bytes JPEG each, max \(BluetoothMeshService.meshEnvelopeMaxBytes) B per packet)")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(Color.accentColor.opacity(0.12))
     }
 
     private var statusStrip: some View {
@@ -133,7 +210,7 @@ struct ChatView: View {
                         .foregroundStyle(.secondary)
                 }
             }
-            Text("Photos: small JPEG chunks over BLE (~12KB max). Switch tab → Dashboard to leave chat.")
+            Text("Photos: many small mesh packets (see ⓘ). Dashboard = link quality.")
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
         }
