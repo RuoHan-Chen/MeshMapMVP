@@ -457,7 +457,7 @@ struct AlertThreadView: View {
                         .foregroundColor(Color(hex: "#4a6580"))
                         .frame(width: 34, height: 34)
                 }
-                .onChange(of: selectedPhoto) { _, item in
+                .onChange(of: selectedPhoto) { item in
                     Task {
                         if let data = try? await item?.loadTransferable(type: Data.self),
                            let img = UIImage(data: data) {
@@ -584,7 +584,7 @@ struct NewAlertSheet: View {
  
     @State private var severity: AlertSeverity = .warning
     @State private var title = ""
-    @State private var body  = ""
+    @State private var alertBodyText = ""
     @State private var selectedPhoto: PhotosPickerItem? = nil
     @State private var photos: [UIImage] = []
  
@@ -651,13 +651,13 @@ struct NewAlertSheet: View {
                         VStack(alignment: .leading, spacing: 8) {
                             fieldLabel("DETAILS")
                             ZStack(alignment: .topLeading) {
-                                if body.isEmpty {
+                                if alertBodyText.isEmpty {
                                     Text("What did you observe? Be specific about location and time.")
                                         .font(.custom("IBMPlexSans-Regular", size: 13))
                                         .foregroundColor(Color(hex: "#2a3f52"))
                                         .padding(12)
                                 }
-                                TextEditor(text: $body)
+                                TextEditor(text: $alertBodyText)
                                     .font(.custom("IBMPlexSans-Regular", size: 13))
                                     .foregroundColor(Color(hex: "#d4eaf5"))
                                     .scrollContentBackground(.hidden)
@@ -686,10 +686,12 @@ struct NewAlertSheet: View {
                                     .frame(width: 72, height: 72)
                                     .background(Color(hex: "#111820"))
                                     .cornerRadius(8)
-                                    .overlay(RoundedRectangle(cornerRadius: 8)
-                                        .stroke(Color(hex: "#1e2d3d"), lineWidth: 0.5).strokeBorder(style: StrokeStyle(lineWidth: 0.5, dash: [4])))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 8)
+                                            .stroke(Color(hex: "#1e2d3d"), style: StrokeStyle(lineWidth: 0.5, dash: [4]))
+                                    )
                                 }
-                                .onChange(of: selectedPhoto) { _, item in
+                                .onChange(of: selectedPhoto) { item in
                                     Task {
                                         if let data = try? await item?.loadTransferable(type: Data.self),
                                            let img = UIImage(data: data) {
@@ -726,7 +728,7 @@ struct NewAlertSheet: View {
     private func post() {
         let photoDataArray = photos.compactMap { $0.jpegData(compressionQuality: 0.5) }
         let alert = MeshAlertItem(
-            id: UUID(), severity: severity, title: title, body: body,
+            id: UUID(), severity: severity, title: title, body: alertBodyText,
             authorID: mesh.identity.deviceID, authorName: mesh.identity.nickname,
             timestamp: Date(), isExpired: false, expiresAt: Date().addingTimeInterval(6 * 3600),
             confirmedByContacts: [], comments: [], photoData: photoDataArray

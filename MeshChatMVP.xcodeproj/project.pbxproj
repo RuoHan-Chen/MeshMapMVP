@@ -23,6 +23,21 @@
 		A100000F /* MapLabelModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200000F /* MapLabelModels.swift */; };
 		A1000010 /* ImageChunkPayload.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000010 /* ImageChunkPayload.swift */; };
 		A1000011 /* MeshImageUtils.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000011 /* MeshImageUtils.swift */; };
+		A1000015 /* Contact.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000020 /* Contact.swift */; };
+		A1000016 /* PersistedMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000021 /* PersistedMessage.swift */; };
+		A1000017 /* Alert.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000022 /* Alert.swift */; };
+		A1000018 /* Vouch.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000023 /* Vouch.swift */; };
+		A1000019 /* NodeSighting.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000024 /* NodeSighting.swift */; };
+		A100001A /* AlertPayload.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000025 /* AlertPayload.swift */; };
+		A100001B /* VouchPayload.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000026 /* VouchPayload.swift */; };
+		A100001C /* DatabaseManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000027 /* DatabaseManager.swift */; };
+		A100001D /* Alertfeedview.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000028 /* Alertfeedview.swift */; };
+		A100001E /* AppModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000029 /* AppModels.swift */; };
+		A100001F /* Channelchatview.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200002A /* Channelchatview.swift */; };
+		A1000020 /* LocalStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200002B /* LocalStore.swift */; };
+		A1000021 /* Lockscreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200002C /* Lockscreen.swift */; };
+		A1000022 /* Onboardingflow.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200002D /* Onboardingflow.swift */; };
+		D974FBAF2F651AD7008F4874 /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = D974FBAE2F651AD7008F4874 /* GRDB */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -43,6 +58,20 @@
 		A200000F /* MapLabelModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapLabelModels.swift; sourceTree = "<group>"; };
 		A2000010 /* ImageChunkPayload.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageChunkPayload.swift; sourceTree = "<group>"; };
 		A2000011 /* MeshImageUtils.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeshImageUtils.swift; sourceTree = "<group>"; };
+		A2000020 /* Contact.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Contact.swift; sourceTree = "<group>"; };
+		A2000021 /* PersistedMessage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersistedMessage.swift; sourceTree = "<group>"; };
+		A2000022 /* Alert.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Alert.swift; sourceTree = "<group>"; };
+		A2000023 /* Vouch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Vouch.swift; sourceTree = "<group>"; };
+		A2000024 /* NodeSighting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NodeSighting.swift; sourceTree = "<group>"; };
+		A2000025 /* AlertPayload.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlertPayload.swift; sourceTree = "<group>"; };
+		A2000026 /* VouchPayload.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VouchPayload.swift; sourceTree = "<group>"; };
+		A2000027 /* DatabaseManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DatabaseManager.swift; sourceTree = "<group>"; };
+		A2000028 /* Alertfeedview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Alertfeedview.swift; sourceTree = "<group>"; };
+		A2000029 /* AppModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModels.swift; sourceTree = "<group>"; };
+		A200002A /* Channelchatview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Channelchatview.swift; sourceTree = "<group>"; };
+		A200002B /* LocalStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalStore.swift; sourceTree = "<group>"; };
+		A200002C /* Lockscreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Lockscreen.swift; sourceTree = "<group>"; };
+		A200002D /* Onboardingflow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Onboardingflow.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -50,6 +79,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				D974FBAF2F651AD7008F4874 /* GRDB in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -82,6 +112,20 @@
 				A200000F /* MapLabelModels.swift */,
 				A2000010 /* ImageChunkPayload.swift */,
 				A2000011 /* MeshImageUtils.swift */,
+				A2000020 /* Contact.swift */,
+				A2000021 /* PersistedMessage.swift */,
+				A2000022 /* Alert.swift */,
+				A2000023 /* Vouch.swift */,
+				A2000024 /* NodeSighting.swift */,
+				A2000025 /* AlertPayload.swift */,
+				A2000026 /* VouchPayload.swift */,
+				A2000027 /* DatabaseManager.swift */,
+				A2000028 /* Alertfeedview.swift */,
+				A2000029 /* AppModels.swift */,
+				A200002A /* Channelchatview.swift */,
+				A200002B /* LocalStore.swift */,
+				A200002C /* Lockscreen.swift */,
+				A200002D /* Onboardingflow.swift */,
 				A200000A /* Assets.xcassets */,
 			);
 			path = MeshChatMVP;
@@ -139,6 +183,9 @@
 				Base,
 			);
 			mainGroup = A4000000;
+			packageReferences = (
+				D974FBAD2F651AD7008F4874 /* XCRemoteSwiftPackageReference "GRDB" */,
+			);
 			productRefGroup = A4000002 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -179,6 +226,20 @@
 				A1000009 /* ChatMessage.swift in Sources */,
 				A1000010 /* ImageChunkPayload.swift in Sources */,
 				A1000011 /* MeshImageUtils.swift in Sources */,
+				A1000015 /* Contact.swift in Sources */,
+				A1000016 /* PersistedMessage.swift in Sources */,
+				A1000017 /* Alert.swift in Sources */,
+				A1000018 /* Vouch.swift in Sources */,
+				A1000019 /* NodeSighting.swift in Sources */,
+				A100001A /* AlertPayload.swift in Sources */,
+				A100001B /* VouchPayload.swift in Sources */,
+				A100001C /* DatabaseManager.swift in Sources */,
+				A100001D /* Alertfeedview.swift in Sources */,
+				A100001E /* AppModels.swift in Sources */,
+				A100001F /* Channelchatview.swift in Sources */,
+				A1000020 /* LocalStore.swift in Sources */,
+				A1000021 /* Lockscreen.swift in Sources */,
+				A1000022 /* Onboardingflow.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -304,6 +365,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		D974FBAD2F651AD7008F4874 /* XCRemoteSwiftPackageReference "GRDB" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/groue/GRDB.swift";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 6.0.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		D974FBAE2F651AD7008F4874 /* GRDB */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = D974FBAD2F651AD7008F4874 /* XCRemoteSwiftPackageReference "GRDB" */;
+			productName = GRDB;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = A6000001 /* Project object */;
 }

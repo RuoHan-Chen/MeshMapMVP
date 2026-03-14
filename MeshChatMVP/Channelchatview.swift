@@ -282,7 +282,7 @@ struct ChannelChatView: View {
                 }
                 .padding(.vertical, 10)
             }
-            .onChange(of: messages.count) { _, _ in
+            .onChange(of: messages.count) { _ in
                 if let last = messages.last {
                     withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
                 }
@@ -350,7 +350,7 @@ struct ChannelChatView: View {
                         .foregroundColor(Color(hex: "#4a6580"))
                         .frame(width: 36, height: 36)
                 }
-                .onChange(of: selectedPhoto) { _, item in
+                .onChange(of: selectedPhoto) { item in
                     Task {
                         if let data = try? await item?.loadTransferable(type: Data.self),
                            let img = UIImage(data: data) {

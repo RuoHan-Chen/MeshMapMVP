@@ -52,6 +52,34 @@ struct StoredMessage: Identifiable, Codable, Equatable {
     var reactions: [String: [String]] = [:]  // emoji → [senderID]
     var replyToID: UUID?
 
+    init(
+        id: UUID = UUID(),
+        channelID: String,
+        envelopeID: UUID,
+        senderID: String,
+        senderName: String,
+        text: String,
+        imageData: Data? = nil,
+        timestamp: Date,
+        isFromMe: Bool,
+        distanceMeters: Double? = nil,
+        reactions: [String: [String]] = [:],
+        replyToID: UUID? = nil
+    ) {
+        self.id = id
+        self.channelID = channelID
+        self.envelopeID = envelopeID
+        self.senderID = senderID
+        self.senderName = senderName
+        self.text = text
+        self.imageData = imageData
+        self.timestamp = timestamp
+        self.isFromMe = isFromMe
+        self.distanceMeters = distanceMeters
+        self.reactions = reactions
+        self.replyToID = replyToID
+    }
+
     // Convert from live ChatMessage
     init(from msg: ChatMessage, channelID: String, myID: String) {
         self.id = msg.id
@@ -60,9 +88,12 @@ struct StoredMessage: Identifiable, Codable, Equatable {
         self.senderID = msg.senderID
         self.senderName = msg.senderName
         self.text = msg.text
+        self.imageData = msg.imageJPEGBase64.flatMap { Data(base64Encoded: $0) }
         self.timestamp = msg.date
         self.isFromMe = msg.isLocal
         self.distanceMeters = msg.distanceFromMe
+        self.reactions = [:]
+        self.replyToID = nil
     }
 }
 
