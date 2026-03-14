@@ -1,6 +1,7 @@
 import Foundation
 import CoreBluetooth
 import CoreLocation
+import Compression
 import UserNotifications
 import UIKit
 
@@ -1003,13 +1004,40 @@ final class BluetoothMeshService: NSObject, ObservableObject {
     private struct ThumbnailChunkBuffer {
         let labelId: UUID
         let total: Int
+        var compressed: Bool
         var chunks: [Int: Data]
+    }
+
+    /// LZ4 compress; returns nil if compression fails or expands data (caller uses original).
+    private static func lz4Compress(_ data: Data) -> Data? {
+        let srcSize = data.count
+        let destSize = srcSize + (srcSize / 16) + 64
+        let dest = UnsafeMutablePointer<UInt8>.allocate(capacity: destSize)
+        defer { dest.deallocate() }
+        return data.withUnsafeBytes { srcPtr in
+            guard let src = srcPtr.baseAddress?.assumingMemoryBound(to: UInt8.self) else { return nil }
+            let written = compression_encode_buffer(dest, destSize, src, srcSize, nil, COMPRESSION_LZ4)
+            guard written > 0, written < srcSize else { return nil }
+            return Data(bytes: dest, count: written)
+        }
+    }
+
+    /// LZ4 decompress; returns nil on failure. Max decompressed size 64KB (enough for thumbnails).
+    private static func lz4Decompress(_ data: Data, maxDecompressed: Int = 64 * 1024) -> Data? {
+        let dest = UnsafeMutablePointer<UInt8>.allocate(capacity: maxDecompressed)
+        defer { dest.deallocate() }
+        return data.withUnsafeBytes { srcPtr in
+            guard let src = srcPtr.baseAddress?.assumingMemoryBound(to: UInt8.self) else { return nil }
+            let written = compression_decode_buffer(dest, maxDecompressed, src, data.count, nil, COMPRESSION_LZ4)
+            guard written > 0 else { return nil }
+            return Data(bytes: dest, count: written)
+        }
     }
 
     /// Send a compressed thumbnail image for an existing label. jpegData should already be small.
     func sendLabelThumbnail(labelId: UUID, jpegData: Data) {
-        // Cap total thumbnail size to avoid flooding the mesh; keep only the first ~2.5 KB.
-        let maxTotalBytes = 2_500
+        // Cap total thumbnail size to avoid flooding the mesh; allow a bit more so JPEG is not visibly truncated.
+        let maxTotalBytes = 8_000
         let trimmedData: Data
         if jpegData.count > maxTotalBytes {
             trimmedData = jpegData.prefix(maxTotalBytes)
@@ -1022,23 +1050,31 @@ final class BluetoothMeshService: NSObject, ObservableObject {
             self?.storeThumbnail(labelId: labelId, data: trimmedData)
         }
 
+        // LZ4 compress if it reduces size (JPEG often doesn't compress much; helps with sparse data).
+        var dataToChunk = trimmedData
+        var useCompressed = false
+        if let compressed = Self.lz4Compress(trimmedData), compressed.count < trimmedData.count {
+            dataToChunk = compressed
+            useCompressed = true
+        }
+
         let imageId = labelId
-        // Each chunk becomes base64 and wrapped in JSON + envelope; keep this very small.
-        // 80 raw bytes → ~108B base64 + JSON ≈ < 260B payload, safely under 512B envelope.
-        let maxChunkSize = 80 // raw bytes in payload.data
-        let totalChunks = Int(ceil(Double(trimmedData.count) / Double(maxChunkSize)))
+        // 80 raw bytes keeps envelope (base64 + JSON wrapper) under 512B.
+        let maxChunkSize = 80
+        let totalChunks = Int(ceil(Double(dataToChunk.count) / Double(maxChunkSize)))
         guard totalChunks > 0 else { return }
 
         for index in 0..<totalChunks {
             let start = index * maxChunkSize
-            let end = min(start + maxChunkSize, trimmedData.count)
-            let slice = trimmedData[start..<end]
+            let end = min(start + maxChunkSize, dataToChunk.count)
+            let slice = dataToChunk[start..<end]
             let payload = MapLabelImageChunkPayload(
                 imageId: imageId,
                 labelId: labelId,
                 index: index,
                 total: totalChunks,
-                data: Data(slice)
+                data: Data(slice),
+                compressed: useCompressed ? true : nil
             )
             guard let payloadData = try? JSONEncoder().encode(payload) else { continue }
             let env = MeshEnvelope(
@@ -1052,8 +1088,8 @@ final class BluetoothMeshService: NSObject, ObservableObject {
                 senderLatitude: nil,
                 senderLongitude: nil
             )
-            log("Thumbnail chunk \(index + 1)/\(totalChunks) for label \(labelId) size=\(payloadData.count)B")
-            let delay = Double(index) * 0.06 // Stagger sends so receiver isn't overwhelmed
+            log("Thumbnail chunk \(index + 1)/\(totalChunks) for label \(labelId) size=\(payloadData.count)B\(useCompressed ? " LZ4" : "")")
+            let delay = Double(index) * 0.03 // Stagger 30ms per chunk (faster than 60ms; envelope stays <512B)
             bleQueue.asyncAfter(deadline: .now() + delay) { [weak self] in
                 _ = self?.broadcastEnvelope(env, excludeCentral: nil, excludePeripheral: nil)
             }
@@ -1063,9 +1099,11 @@ final class BluetoothMeshService: NSObject, ObservableObject {
     private func handleIncomingImageChunk(_ chunk: MapLabelImageChunkPayload) {
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
-            log("Thumbnail chunk rx imageId=\(chunk.imageId) labelId=\(chunk.labelId) index=\(chunk.index + 1)/\(chunk.total) size=\(chunk.data.count)B")
-            var buffer = self.thumbnailBuffers[chunk.imageId] ?? ThumbnailChunkBuffer(labelId: chunk.labelId, total: chunk.total, chunks: [:])
+            let compressed = chunk.compressed ?? false
+            log("Thumbnail chunk rx imageId=\(chunk.imageId) labelId=\(chunk.labelId) index=\(chunk.index + 1)/\(chunk.total) size=\(chunk.data.count)B\(compressed ? " LZ4" : "")")
+            var buffer = self.thumbnailBuffers[chunk.imageId] ?? ThumbnailChunkBuffer(labelId: chunk.labelId, total: chunk.total, compressed: compressed, chunks: [:])
             buffer.chunks[chunk.index] = chunk.data
+            if buffer.compressed != compressed { buffer.compressed = compressed }
             self.thumbnailBuffers[chunk.imageId] = buffer
 
             if buffer.chunks.count == buffer.total {
@@ -1074,10 +1112,13 @@ final class BluetoothMeshService: NSObject, ObservableObject {
                     if let part = buffer.chunks[i] {
                         data.append(part)
                     } else {
-                        return // missing chunk; wait for more
+                        return
                     }
                 }
                 self.thumbnailBuffers.removeValue(forKey: chunk.imageId)
+                if buffer.compressed, let decompressed = Self.lz4Decompress(data) {
+                    data = decompressed
+                }
                 self.storeThumbnail(labelId: buffer.labelId, data: data)
                 log("Thumbnail complete for label \(buffer.labelId) bytes=\(data.count)")
             }

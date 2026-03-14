@@ -26,6 +26,9 @@ struct MapTabView: View {
     @State private var showTooFarAlert = false
     @State private var selectedLabel: MapLabelRecord?
     @State private var selectedCluster: LabelCluster?
+    @State private var showSOSAlert = false
+    @State private var showShareMapSheet = false
+    @State private var shareMapURL: URL?
 
     /// Labels built from mesh.mapLabels + mesh.labelVotes; filtered to within 5km and not expired.
     private var labelRecords: [MapLabelRecord] {
@@ -262,6 +265,24 @@ struct MapTabView: View {
                             Image(systemName: "map.fill")
                                 .font(.body)
                         }
+                        Button {
+                            showSOSAlert = true
+                        } label: {
+                            Text("SOS")
+                                .font(.subheadline.weight(.bold))
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 6)
+                                .background(.red, in: RoundedRectangle(cornerRadius: 8))
+                        }
+                        .buttonStyle(.plain)
+                        Button {
+                            prepareAndShareMap()
+                        } label: {
+                            Image(systemName: "square.and.arrow.up")
+                                .font(.body)
+                        }
+                        .help("Share map with outside world (events + member locations)")
                     }
                     .padding(10)
                     .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10))
@@ -281,6 +302,20 @@ struct MapTabView: View {
                 Button("OK", role: .cancel) {}
             } message: {
                 Text("Place event labels within 5 km of your current location. Turn on Share location and move closer.")
+            }
+            .alert("Contact emergency services?", isPresented: $showSOSAlert) {
+                Button("No", role: .cancel) {}
+                Button("Yes", role: .destructive) {}
+            } message: {
+                Text("Dummy SOS button for prototype only. This does not call emergency services.")
+            }
+            .sheet(isPresented: $showShareMapSheet) {
+                if let url = shareMapURL {
+                    ShareMapSheet(activityItems: [url]) {
+                        showShareMapSheet = false
+                        shareMapURL = nil
+                    }
+                }
             }
             .sheet(isPresented: $showOfflineInfo) {
                 OfflineMapSheet(isCaching: $isCaching, region: region, onCache: cacheCurrentRegion)
@@ -396,6 +431,128 @@ struct MapTabView: View {
         }
     }
 
+    /// Build map export (events + network members) and present share sheet (for edge nodes to share with outside world).
+    private func prepareAndShareMap() {
+        let export = MapExport(
+            version: 1,
+            exportDate: ISO8601DateFormatter().string(from: Date()),
+            exporterName: mesh.identity.nickname,
+            members: buildExportMembers(),
+            events: buildExportEvents()
+        )
+        guard let data = try? JSONEncoder().encode(export),
+              let jsonString = String(data: data, encoding: .utf8) else { return }
+
+        let html = """
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8" />
+          <title>MeshMap Export</title>
+          <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+          <link
+            rel="stylesheet"
+            href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+            integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+            crossorigin=""
+          />
+          <style>
+            html, body, #map { height: 100%; margin: 0; padding: 0; }
+          </style>
+        </head>
+        <body>
+          <div id="map"></div>
+          <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+            integrity="sha256-20nQCchB9co0qIJbrJ7CkJ8M5LQ8sET33Uz6DpGSo1A="
+            crossorigin=""></script>
+          <script>
+            const data = \(jsonString);
+            const map = L.map('map');
+            let bounds;
+
+            function addMarker(lat, lon, label) {
+              const m = L.marker([lat, lon]).addTo(map).bindPopup(label);
+              if (!bounds) {
+                bounds = L.latLngBounds([lat, lon], [lat, lon]);
+              } else {
+                bounds.extend([lat, lon]);
+              }
+            }
+
+            data.members.forEach(m => {
+              addMarker(m.latitude, m.longitude, `Member: ${m.name}`);
+            });
+
+            data.events.forEach(e => {
+              const label = `${e.name || e.category} (${e.category})`;
+              addMarker(e.latitude, e.longitude, label);
+            });
+
+            if (bounds) {
+              map.fitBounds(bounds.pad(0.2));
+            } else {
+              map.setView([0, 0], 2);
+            }
+
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+              maxZoom: 19,
+              attribution: '&copy; OpenStreetMap contributors'
+            }).addTo(map);
+          </script>
+        </body>
+        </html>
+        """
+
+        let fileName = "meshmap-export-\(Date().timeIntervalSince1970).html"
+        let temp = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
+        do {
+            try html.data(using: .utf8)?.write(to: temp)
+            shareMapURL = temp
+            showShareMapSheet = true
+        } catch {
+            // Could present an error; for now skip
+        }
+    }
+
+    private func buildExportMembers() -> [MapExportMember] {
+        var list: [MapExportMember] = []
+        for (senderID, coords) in mesh.senderCoordinates {
+            let name = mesh.announceNicknames[senderID] ?? String(senderID.prefix(8))
+            list.append(MapExportMember(
+                id: senderID,
+                name: name,
+                latitude: coords.lat,
+                longitude: coords.lon
+            ))
+        }
+        if mesh.identity.shareLocation, let my = mesh.lastKnownLocation {
+            list.append(MapExportMember(
+                id: mesh.identity.deviceID,
+                name: mesh.identity.nickname,
+                latitude: my.lat,
+                longitude: my.lon
+            ))
+        }
+        return list
+    }
+
+    private func buildExportEvents() -> [MapExportEvent] {
+        labelRecords.map { record in
+            MapExportEvent(
+                id: record.id.uuidString,
+                category: record.category.rawValue,
+                latitude: record.latitude,
+                longitude: record.longitude,
+                name: record.displayName,
+                eventDescription: record.customDescription,
+                icon: record.customSystemImage,
+                date: ISO8601DateFormatter().string(from: record.date),
+                upVotes: record.upVotes,
+                downVotes: record.downVotes
+            )
+        }
+    }
+
     /// Color for event pin: redder = more valid votes (higher confidence score).
     private func eventColor(for record: MapLabelRecord) -> Color {
         let score = record.confidenceScore
@@ -447,6 +604,67 @@ private struct LabelCluster: Identifiable {
     let id: UUID
     var coordinate: CLLocationCoordinate2D
     var records: [MapLabelRecord]
+}
+
+// MARK: - Map export (share with outside world)
+
+private struct MapExportMember: Codable {
+    let id: String
+    let name: String
+    let latitude: Double
+    let longitude: Double
+}
+
+private struct MapExportEvent: Codable {
+    let id: String
+    let category: String
+    let latitude: Double
+    let longitude: Double
+    let name: String
+    let eventDescription: String?
+    let icon: String?
+    let date: String
+    let upVotes: Int
+    let downVotes: Int
+}
+
+private struct MapExport: Codable {
+    let version: Int
+    let exportDate: String
+    let exporterName: String
+    let members: [MapExportMember]
+    let events: [MapExportEvent]
+}
+
+/// Presents system share sheet for a file URL; calls onDismiss when the sheet is dismissed.
+private struct ShareMapSheet: UIViewControllerRepresentable {
+    let activityItems: [Any]
+    var onDismiss: (() -> Void)?
+
+    func makeUIViewController(context: Context) -> UIViewController {
+        let vc = UIViewController()
+        vc.view.backgroundColor = .clear
+        return vc
+    }
+
+    func updateUIViewController(_ uiViewController: UIViewController, context: Context) {
+        guard !context.coordinator.presented else { return }
+        let av = UIActivityViewController(activityItems: activityItems, applicationActivities: nil)
+        av.completionWithItemsHandler = { _, _, _, _ in
+            onDismiss?()
+        }
+        av.popoverPresentationController?.sourceView = uiViewController.view
+        uiViewController.present(av, animated: true)
+        context.coordinator.presented = true
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+
+    class Coordinator {
+        var presented = false
+    }
 }
 
 // MARK: - Compass (direction user is pointed)
