@@ -108,8 +108,11 @@ final class BluetoothMeshService: NSObject, ObservableObject {
     private var bleScanIdle: Double = 40
 
     private let defaultTTL: UInt8 = 5
-    /// Raw bytes per image chunk so full JSON envelope stays ≤512 B over BLE.
-    private static let imageChunkRawBytes = 40
+    /// Max JSON size per BLE write (mesh policy).
+    static let meshEnvelopeMaxBytes = 512
+    /// Raw JPEG bytes per `ImageChunkPayload` (whole mesh packet must stay ≤ `meshEnvelopeMaxBytes`).
+    static let imageChunkByteSize = 40
+    private static let imageChunkRawBytes = imageChunkByteSize
     /// Reassembly buffers (main thread).
     private var pendingImages: [UUID: PendingImageChunkBuffer] = [:]
 
@@ -302,9 +305,11 @@ final class BluetoothMeshService: NSObject, ObservableObject {
     }
 
     /// Compress, chunk, flood JPEG (no encryption). Best-effort over BLE size limit.
-    func sendImage(jpegData: Data) {
+    /// - Parameter completion: Called on main when finished; argument is packets sent (0 if nothing sent).
+    func sendImage(jpegData: Data, completion: ((Int) -> Void)? = nil) {
         guard !jpegData.isEmpty, jpegData.count <= MeshImageUtils.maxJPEGBytes else {
             log("Image send: empty or too large")
+            DispatchQueue.main.async { completion?(0) }
             return
         }
         let transferId = UUID()
@@ -334,7 +339,10 @@ final class BluetoothMeshService: NSObject, ObservableObject {
             }
             envelopes.append(env)
         }
-        guard !envelopes.isEmpty else { return }
+        guard !envelopes.isEmpty else {
+            DispatchQueue.main.async { completion?(0) }
+            return
+        }
         let firstEnv = envelopes[0]
         let imageB64 = jpegData.base64EncodedString()
         let persisted = PersistedMessage(
@@ -349,13 +357,18 @@ final class BluetoothMeshService: NSObject, ObservableObject {
         )
         try? DatabaseManager.shared.upsertContact(id: identity.deviceID, nickname: identity.nickname)
         try? DatabaseManager.shared.saveMessage(persisted)
+        let n = envelopes.count
         bleQueue.async { [weak self] in
-            guard let self else { return }
+            guard let self else {
+                DispatchQueue.main.async { completion?(0) }
+                return
+            }
             for env in envelopes {
                 _ = self.markSeen(env.id)
                 _ = self.broadcastEnvelope(env, excludeCentral: nil, excludePeripheral: nil)
                 Thread.sleep(forTimeInterval: 0.02)
             }
+            DispatchQueue.main.async { completion?(n) }
         }
         appendLocalChat(envelope: firstEnv, text: "[photo]", imageJPEGBase64: imageB64)
     }
