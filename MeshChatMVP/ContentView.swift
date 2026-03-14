@@ -1,81 +1,62 @@
 import SwiftUI
+import CoreLocation
 
 struct ContentView: View {
     @EnvironmentObject var mesh: BluetoothMeshService
-    @State private var nicknameEditor = ""
-
+    
     var body: some View {
-        TabView {
-            ChatView()
-                .tabItem { Label("Chat", systemImage: "bubble.left.and.bubble.right") }
-
-            MapTabView()
-                .tabItem { Label("Map", systemImage: "map") }
-
-            DebugDashboardView()
-                .tabItem { Label("Dashboard", systemImage: "square.grid.2x2") }
-
-            ContactsListView()
-                .environmentObject(mesh)
-                .tabItem { Label("Contacts", systemImage: "person.2") }
-
-            ProfileView()
-                .tabItem { Label("You", systemImage: "person.circle") }
+        VStack(spacing: 0) {
+            MeshStatusBar()
+            
+            TabView {
+                AlertsFeedView()
+                    .tabItem { Label("Alerts", systemImage: "exclamationmark.triangle") }
+                    .badge(shouldShowAlertBadge ? "!" : nil)
+                
+                ChatView()
+                    .tabItem { Label("Chat", systemImage: "bubble.left.and.bubble.right") }
+                    .badge(mesh.contactUnreadTotal > 0 ? "\(mesh.contactUnreadTotal)" : nil)
+                
+                MapTabView()
+                    .tabItem { Label("Map", systemImage: "map") }
+                
+                NetworkView()
+                    .tabItem { Label("Network", systemImage: "person.2") }
+                
+                ProfileView()
+                    .tabItem { Label("Profile", systemImage: "person.circle") }
+            }
         }
         .onAppear {
-            nicknameEditor = mesh.identity.nickname
             mesh.syncScanTimingFromUI()
         }
     }
-}
-
-private struct ProfileView: View {
-    @EnvironmentObject var mesh: BluetoothMeshService
-    @State private var nicknameEditor = ""
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section("Identity") {
-                    TextField("Nickname", text: $nicknameEditor)
-                    Button("Save nickname") {
-                        var id = mesh.identity
-                        id.nickname = nicknameEditor.isEmpty ? id.nickname : nicknameEditor
-                        mesh.updateIdentity(id)
-                    }
-                    LabeledContent("Public key (mesh id)") {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(KeyManager.fingerprint(KeyManager.publicKeyData, length: 12))
-                                .font(.caption.monospaced())
-                            Text(mesh.identity.deviceID)
-                                .font(.caption2)
-                                .textSelection(.enabled)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                }
-                Section("Privacy") {
-                    Toggle("Share my location with peers", isOn: Binding(
-                        get: { mesh.identity.shareLocation },
-                        set: { newValue in
-                            var id = mesh.identity
-                            id.shareLocation = newValue
-                            mesh.updateIdentity(id)
-                        }
-                    ))
-                    Text("When on, your coordinates are included in messages so others can see approximate distance. You can turn this off anytime.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                Section("Tips") {
-                    Text("Open Chat on both phones. Dashboard shows scan windows and auto-connect. Keep apps in foreground for best results.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
+    
+    private var shouldShowAlertBadge: Bool {
+        // Active high-confidence (>70%) map labels within 5km
+        let highConfidenceLabels = mesh.mapLabels.values.filter { payload in
+            let votes = mesh.labelVotes[payload.id] ?? [:]
+            let upVotes = votes.values.filter { $0 == 1 }.count
+            let downVotes = votes.values.filter { $0 == -1 }.count
+            let total = upVotes + downVotes
+            let score = total > 0 ? Double(upVotes) / Double(total) : 0.5
+            
+            if score <= 0.7 { return false }
+            
+            // Check expiry
+            let date = Date(timeIntervalSince1970: Double(payload.timestamp) / 1000)
+            if Date().timeIntervalSince(date) > MapLabelRecord.eventExpirationInterval { return false }
+            
+            // Check distance
+            if let myLoc = mesh.lastKnownLocation {
+                let dist = BluetoothMeshService.haversineMeters(lat1: myLoc.lat, lon1: myLoc.lon, lat2: payload.lat, lon2: payload.lon)
+                if dist > 5000 { return false }
             }
-            .navigationTitle("You")
-            .onAppear { nicknameEditor = mesh.identity.nickname }
+            
+            return true
         }
+        
+        return !highConfidenceLabels.isEmpty || mesh.contactUnreadTotal > 0
     }
 }
 

@@ -30,17 +30,14 @@ struct ChatView: View {
     var body: some View {
         NavigationStack(path: $navPath) {
             VStack(spacing: 0) {
-                statusStrip
-                if !savedContacts.isEmpty {
-                    contactsQuickSection
-                    Divider()
-                }
+                contactsQuickSection
+                Divider()
                 if imageBusy, let total = imageSendPacketsTotal, total > 0 {
                     sendingImageBanner(packetCount: total)
                 }
                 Divider()
                 HStack {
-                    Text("Group chat")
+                    Text("Group channel · broadcast · \(mesh.chatMessages.filter { !$0.isExpired }.count) active")
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(.secondary)
                     Spacer()
@@ -221,42 +218,66 @@ struct ChatView: View {
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 10) {
-                    ForEach(contactsSorted, id: \.id) { row in
-                        let peerID = DatabaseManager.canonicalSenderID(publicKey: row.publicKey)
-                        let act = mesh.activity(forPeerID: peerID)
-                        Button {
-                            navPath.append(PrivateChatRoute(peerID: peerID, displayName: row.nickname))
-                        } label: {
-                            VStack(alignment: .leading, spacing: 4) {
-                                HStack(spacing: 6) {
-                                    Text(row.nickname)
-                                        .font(.subheadline.weight(.semibold))
-                                        .foregroundStyle(.primary)
-                                        .lineLimit(1)
-                                    if let u = act?.unread, u > 0 {
-                                        Text(u > 99 ? "99+" : "\(u)")
-                                            .font(.caption2.weight(.bold))
-                                            .foregroundStyle(.white)
-                                            .frame(minWidth: 18, minHeight: 18)
-                                            .background(Circle().fill(Color.red))
-                                    }
-                                }
-                                Text(act?.lastText.isEmpty == false ? act!.lastText : "Open chat")
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
-                                    .lineLimit(2)
-                                    .multilineTextAlignment(.leading)
-                            }
-                            .frame(width: 148, alignment: .leading)
-                            .padding(10)
-                            .background(RoundedRectangle(cornerRadius: 12).fill(Color(.secondarySystemBackground)))
-                        }
-                        .buttonStyle(.plain)
-                        .contextMenu {
+                    if savedContacts.isEmpty {
+                        Text("No contacts yet")
+                            .font(.caption)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(Capsule().fill(Color.secondary.opacity(0.1)))
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ForEach(contactsSorted, id: \.id) { row in
+                            let peerID = DatabaseManager.canonicalSenderID(publicKey: row.publicKey)
+                            let act = mesh.activity(forPeerID: peerID)
+                            let isLinked = mesh.discoveredPeers.contains(where: { $0.publicKey == row.publicKey && $0.linkState == "connected" })
+                            
                             Button {
-                                editingContact = row
+                                navPath.append(PrivateChatRoute(peerID: peerID, displayName: row.nickname))
                             } label: {
-                                Label("Edit contact", systemImage: "pencil")
+                                VStack(alignment: .center, spacing: 4) {
+                                    ZStack(alignment: .bottomTrailing) {
+                                        Circle()
+                                            .fill(Color.blue)
+                                            .frame(width: 48, height: 48)
+                                            .overlay(
+                                                Text(String(row.nickname.prefix(2)).uppercased())
+                                                    .font(.headline)
+                                                    .foregroundColor(.white)
+                                            )
+                                        
+                                        if isLinked {
+                                            Circle()
+                                                .fill(Color.green)
+                                                .frame(width: 12, height: 12)
+                                                .overlay(Circle().stroke(Color(UIColor.systemBackground), lineWidth: 2))
+                                        }
+                                        
+                                        if let u = act?.unread, u > 0 {
+                                            ZStack {
+                                                Circle()
+                                                    .fill(Color.red)
+                                                    .frame(width: 18, height: 18)
+                                                Text(u > 9 ? "9+" : "\(u)")
+                                                    .font(.system(size: 10, weight: .bold))
+                                                    .foregroundColor(.white)
+                                            }
+                                            .offset(x: 4, y: -36)
+                                        }
+                                    }
+                                    
+                                    Text(row.nickname)
+                                        .font(.caption)
+                                        .lineLimit(1)
+                                        .frame(width: 60)
+                                }
+                            }
+                            .buttonStyle(.plain)
+                            .contextMenu {
+                                Button {
+                                    editingContact = row
+                                } label: {
+                                    Label("Edit contact", systemImage: "pencil")
+                                }
                             }
                         }
                     }
@@ -289,39 +310,6 @@ struct ChatView: View {
         }
     }
 
-    private var statusStrip: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 12) {
-                Label(
-                    mesh.readyRemoteCount > 0 || mesh.subscribedCentralCount > 0 ? "Linked" : "Finding peers…",
-                    systemImage: mesh.readyRemoteCount > 0 || mesh.subscribedCentralCount > 0
-                        ? "link.circle.fill" : "antenna.radiowaves.left.and.right"
-                )
-                .font(.subheadline.weight(.medium))
-                .foregroundStyle(
-                    mesh.readyRemoteCount > 0 || mesh.subscribedCentralCount > 0 ? Color.green : Color.secondary
-                )
-                Spacer()
-                if mesh.isScanning {
-                    Text("Scanning")
-                        .font(.caption2)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(Capsule().fill(Color.green.opacity(0.2)))
-                } else if mesh.secondsUntilNextScan > 0 {
-                    Text("Next scan \(Int(mesh.secondsUntilNextScan))s")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            Text("Tap a group message: saved contact → private chat; else add contact.")
-                .font(.caption2)
-                .foregroundStyle(.tertiary)
-        }
-        .padding(.horizontal)
-        .padding(.vertical, 10)
-        .background(Color(.secondarySystemBackground))
-    }
 
     private func sendingImageBanner(packetCount: Int) -> some View {
         HStack {
@@ -366,6 +354,30 @@ struct ChatView: View {
         }
     }
 
+    private func trustScore(for senderID: String) -> Double {
+        // Heuristic:
+        // Saved friend -> 0.85
+        // Saved associate -> 0.65
+        // Unknown -> 0.40
+        // (Vouch logic omitted for MVP UI simplicity here, just base relationship)
+        
+        // We need to find the contact by senderID (which is deviceID).
+        // DatabaseManager stores contacts by publicKey.
+        // We need to map senderID to publicKey or check if we can find by senderID.
+        // DatabaseManager has `savedNickname(forSenderID:)` which implies lookup.
+        // But `findContactByPublicKey` needs PK.
+        // `BluetoothMeshService` has `isSavedContactPeer(peerID)`.
+        
+        // Let's try to find the contact.
+        // We can iterate savedContacts since we have them loaded.
+        if let contact = savedContacts.first(where: { DatabaseManager.canonicalSenderID(publicKey: $0.publicKey) == senderID }) {
+            if contact.relationship == "friend" { return 0.85 }
+            if contact.relationship == "associate" { return 0.65 }
+            return 0.50 // Default saved
+        }
+        return 0.40
+    }
+
     private func bubbleContent(_ m: ChatMessage, trailingIcon: String?) -> some View {
         VStack(alignment: m.isLocal ? .trailing : .leading, spacing: 4) {
             HStack(spacing: 6) {
@@ -377,6 +389,10 @@ struct ChatView: View {
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                     }
+                    // Trust badge
+                    TrustBadge(score: trustScore(for: m.senderID))
+                    // TTL badge
+                    TTLBadge(expiresAt: m.date.addingTimeInterval(ChatMessage.expirationInterval))
                 }
                 Text(m.date, style: .time).font(.caption2).foregroundStyle(.secondary)
                 if m.isLocal { Text("You").font(.caption.weight(.semibold)) }

@@ -20,10 +20,16 @@ struct PrivateChatView: View {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 10) {
                         if thread.isEmpty {
-                            Text("No messages yet. DMs expire after 20 minutes on this device and on the mesh.")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .padding()
+                            HStack {
+                                Image(systemName: "info.circle")
+                                Text("Direct messages expire after 20 minutes on this device and on the mesh.")
+                            }
+                            .font(.caption)
+                            .foregroundColor(.meshInfo)
+                            .padding()
+                            .background(Color.meshInfo.opacity(0.1))
+                            .cornerRadius(8)
+                            .padding()
                         }
                         ForEach(thread) { m in
                             dmBubble(m).id(m.id)
@@ -74,6 +80,8 @@ struct PrivateChatView: View {
                     if !m.isLocal {
                         Text(mesh.senderDisplayName(senderID: m.senderID, fallbackSenderName: m.senderName))
                             .font(.caption.weight(.semibold))
+                        TrustBadge(score: trustScore(for: m.senderID))
+                        TTLBadge(expiresAt: m.date.addingTimeInterval(ChatMessage.expirationInterval))
                     }
                     Text(m.date, style: .time).font(.caption2).foregroundStyle(.secondary)
                     if m.isLocal { Text("You").font(.caption.weight(.semibold)) }
@@ -88,5 +96,14 @@ struct PrivateChatView: View {
             }
             if !m.isLocal { Spacer(minLength: 48) }
         }
+    }
+    
+    private func trustScore(for senderID: String) -> Double {
+        guard let pk = KeyManager.decodePublicKeyBase64(senderID) else { return 0.40 }
+        if let contact = try? DatabaseManager.shared.findContactByPublicKey(pk) {
+            if contact.relationship == "friend" { return 0.85 }
+            if contact.relationship == "associate" { return 0.65 }
+        }
+        return 0.40
     }
 }

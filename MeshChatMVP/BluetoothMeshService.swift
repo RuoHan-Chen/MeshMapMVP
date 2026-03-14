@@ -75,6 +75,12 @@ final class BluetoothMeshService: NSObject, ObservableObject {
     @Published private(set) var subscribedCentralCount: Int = 0
     @Published private(set) var readyRemoteCount: Int = 0
 
+    /// Running count of messages this device has relayed to other peers.
+    @Published var relayedMessageCount: Int = 0
+
+    /// Count of envelope IDs currently in the deduplication cache (for security display).
+    var seenEnvelopeCount: Int { dedupIds.count }
+
     /// Saved contacts only: last line + unread (persisted).
     @Published private(set) var contactActivity: [String: ContactActivityState] = [:]
     /// Bumps when any contact activity/unread changes (refresh Chat + Contacts rows).
@@ -359,6 +365,7 @@ final class BluetoothMeshService: NSObject, ObservableObject {
         loadIgnoredLabels()
         startPruneTimer()
         requestNotificationAuthIfNeeded()
+        relayedMessageCount = UserDefaults.standard.integer(forKey: "meshRelayCount")
     }
 
     deinit {
@@ -1394,6 +1401,10 @@ final class BluetoothMeshService: NSObject, ObservableObject {
             var relay = env
             relay.ttl = env.ttl - 1
             let delay = TimeInterval(Double.random(in: 0.05...0.15))
+            DispatchQueue.main.async { [weak self] in
+                self?.relayedMessageCount += 1
+                UserDefaults.standard.set(self?.relayedMessageCount ?? 0, forKey: "meshRelayCount")
+            }
             bleQueue.asyncAfter(deadline: .now() + delay) { [weak self] in
                 _ = self?.broadcastEnvelope(relay, excludeCentral: sourceCentral, excludePeripheral: sourcePeripheral)
             }

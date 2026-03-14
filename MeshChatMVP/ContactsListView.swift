@@ -37,9 +37,19 @@ struct ContactsListView: View {
                                 PrivateChatView(peerID: peerID, displayName: c.nickname)
                                     .environmentObject(mesh)
                             } label: {
-                                HStack(alignment: .top, spacing: 10) {
+                                HStack(spacing: 12) {
+                                    // Avatar
+                                    Circle()
+                                        .fill(Color.blue)
+                                        .frame(width: 48, height: 48)
+                                        .overlay(
+                                            Text(String(c.nickname.prefix(2)).uppercased())
+                                                .font(.headline)
+                                                .foregroundColor(.white)
+                                        )
+                                    
                                     VStack(alignment: .leading, spacing: 4) {
-                                        HStack(spacing: 8) {
+                                        HStack {
                                             Text(c.nickname)
                                                 .font(.headline)
                                             if let u = act?.unread, u > 0 {
@@ -50,16 +60,24 @@ struct ContactsListView: View {
                                                     .padding(.vertical, 2)
                                                     .background(Capsule().fill(Color.red))
                                             }
+                                            Spacer()
+                                            if let date = act?.lastDate, date > 0 {
+                                                Text(Date(timeIntervalSince1970: date), style: .time)
+                                                    .font(.caption2)
+                                                    .foregroundColor(.secondary)
+                                            }
                                         }
+                                        
                                         Text(act?.lastText.isEmpty == false ? act!.lastText : "No messages yet")
                                             .font(.subheadline)
                                             .foregroundStyle(.secondary)
-                                            .lineLimit(2)
+                                            .lineLimit(1)
+                                        
                                         Text("\(KeyManager.fingerprint(c.publicKey, length: 8)) · \(c.relationship)")
                                             .font(.caption2)
                                             .foregroundStyle(.tertiary)
+                                            .monospaced()
                                     }
-                                    Spacer(minLength: 0)
                                 }
                                 .padding(.vertical, 4)
                             }
@@ -108,9 +126,20 @@ struct ContactsListView: View {
         contacts.sorted { a, b in
             let pa = DatabaseManager.canonicalSenderID(publicKey: a.publicKey)
             let pb = DatabaseManager.canonicalSenderID(publicKey: b.publicKey)
-            let da = mesh.activity(forPeerID: pa)?.lastDate ?? 0
-            let db = mesh.activity(forPeerID: pb)?.lastDate ?? 0
+            let actA = mesh.activity(forPeerID: pa)
+            let actB = mesh.activity(forPeerID: pb)
+            
+            // Unread first
+            let unreadA = actA?.unread ?? 0
+            let unreadB = actB?.unread ?? 0
+            if (unreadA > 0) != (unreadB > 0) { return unreadA > 0 }
+            
+            // Then date
+            let da = actA?.lastDate ?? 0
+            let db = actB?.lastDate ?? 0
             if da != db { return da > db }
+            
+            // Then alphabet
             return a.nickname.localizedCaseInsensitiveCompare(b.nickname) == .orderedAscending
         }
     }
