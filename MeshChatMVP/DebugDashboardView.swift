@@ -148,7 +148,7 @@ struct DebugDashboardView: View {
                 HStack {
                     Text(fingerprint)
                         .font(.caption.monospaced())
-                        .foregroundStyle(pk == nil ? Color.secondary : Color.accentColor)
+                        .foregroundStyle(pk == nil ? .secondary : .accentColor)
                     if pk != nil {
                         Image(systemName: "chevron.right")
                             .font(.caption2)
@@ -228,7 +228,7 @@ struct NetworkView: View {
                                 .foregroundColor(.secondary)
                             Spacer()
                             Text(mesh.isScanning ? "SCANNING" : "IDLE")
-                                .font(.system(.caption, design: .monospaced))
+                                .font(.caption.monospaced())
                                 .fontWeight(.bold)
                                 .foregroundColor(mesh.isScanning ? .meshSuccess : .secondary)
                         }
@@ -393,7 +393,7 @@ private struct MetricCard: View {
                 .foregroundColor(valueColor)
             Text(subLabel)
                 .font(.system(size: 10))
-                .foregroundColor(.tertiary)
+                .foregroundStyle(.tertiary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(10)
@@ -423,12 +423,12 @@ private struct PeerRow: View {
                 HStack(spacing: 6) {
                     if let pk = peer.publicKey {
                         Text(KeyManager.fingerprint(pk, length: 8))
-                            .font(.system(.caption, design: .monospaced))
+                            .font(.caption.monospaced())
                     }
                     Text("· \(peer.rssi) dBm")
-                        .font(.system(.caption, design: .monospaced))
+                        .font(.caption.monospaced())
                     Text("· 1 hop") // Stub
-                        .font(.system(.caption, design: .monospaced))
+                        .font(.caption.monospaced())
                 }
                 .foregroundColor(.secondary)
             }
@@ -475,12 +475,12 @@ private struct SecurityRow: View {
                 Text(title)
                     .font(.body)
                 Text(detail)
-                    .font(.system(.caption, design: .monospaced))
+                    .font(.caption.monospaced())
                     .foregroundColor(.secondary)
             }
             Spacer()
             Text(status)
-                .font(.system(.caption, weight: .bold, design: .monospaced))
+                .font(.caption.monospaced().weight(.bold))
                 .foregroundColor(statusColor)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)

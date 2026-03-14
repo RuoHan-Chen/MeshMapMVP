@@ -270,11 +270,11 @@ struct MapTabView: View {
                         VStack(spacing: 4) {
                             Text(p.displayName)
                                 .font(.headline)
-                            Text(p.id.replacingOccurrences(of: "sender-", with: "")) // Fingerprint stub
-                                .font(.system(.caption, design: .monospaced))
-                                .foregroundColor(.secondary)
-                            
-                            let trust = peerTrustScore(for: p.id.replacingOccurrences(of: "sender-", with: ""))
+                        Text(p.id.replacingOccurrences(of: "sender-", with: "")) // Fingerprint stub
+                            .font(.caption.monospaced())
+                            .foregroundColor(.secondary)
+                        
+                        let trust = peerTrustScore(for: p.id.replacingOccurrences(of: "sender-", with: ""))
                             TrustBadge(score: trust)
                             
                             // RSSI if available (need to look up peer)

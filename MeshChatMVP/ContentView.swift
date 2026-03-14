@@ -85,7 +85,7 @@ struct MeshBadge: View {
     
     var body: some View {
         Text(text)
-            .font(.system(.caption, design: .monospaced))
+            .font(.caption.monospaced())
             .padding(.horizontal, 6)
             .padding(.vertical, 2)
             .background(backgroundColor)
@@ -109,7 +109,7 @@ struct TrustBadge: View {
     
     var body: some View {
         Text("TRUST \(Int(score * 100))%")
-            .font(.system(.caption, design: .monospaced))
+            .font(.caption.monospaced())
             .padding(.horizontal, 6)
             .padding(.vertical, 2)
             .background(backgroundColor)
@@ -132,7 +132,7 @@ struct TTLBadge: View {
         let minutes = max(0, Int(remaining / 60))
         
         Text("\(minutes)m TTL")
-            .font(.system(.caption, design: .monospaced))
+            .font(.caption.monospaced())
             .padding(.horizontal, 6)
             .padding(.vertical, 2)
             .background(minutes < 5 ? Color.meshAccent : Color.gray.opacity(0.5))
@@ -179,21 +179,21 @@ struct MeshStatusBar: View {
                             }
                         }
                     Text("SCANNING...")
-                        .font(.system(.caption, design: .monospaced))
+                        .font(.caption.monospaced())
                         .foregroundColor(.meshWarn)
                 } else if mesh.readyRemoteCount > 0 {
                     Circle()
                         .fill(Color.meshSuccess)
                         .frame(width: 8, height: 8)
                     Text("\(mesh.readyRemoteCount) PEERS LINKED")
-                        .font(.system(.caption, design: .monospaced))
+                        .font(.caption.monospaced())
                         .foregroundColor(.meshSuccess)
                 } else {
                     Circle()
                         .fill(Color.gray)
                         .frame(width: 8, height: 8)
                     Text("NO PEERS")
-                        .font(.system(.caption, design: .monospaced))
+                        .font(.caption.monospaced())
                         .foregroundColor(.secondary)
                 }
             }
@@ -202,7 +202,7 @@ struct MeshStatusBar: View {
             
             // Centre: app name "MESHMAP"
             Text("MESHMAP")
-                .font(.system(.caption, design: .monospaced))
+                .font(.caption.monospaced())
                 .fontWeight(.bold)
                 .foregroundColor(.secondary)
             
@@ -210,7 +210,7 @@ struct MeshStatusBar: View {
             
             // Right side: "BT ON" / "BT OFF"
             Text(mesh.bluetoothState == .poweredOn ? "BT ON" : "BT OFF")
-                .font(.system(.caption, design: .monospaced))
+                .font(.caption.monospaced())
                 .foregroundColor(mesh.bluetoothState == .poweredOn ? .secondary : .meshAccent)
         }
         .padding(.horizontal, 12)
@@ -368,7 +368,7 @@ struct AlertsFeedView: View {
                                     Text(item.title)
                                         .font(.body)
                                     Text(item.subtitle)
-                                        .font(.system(.caption, design: .monospaced))
+                                        .font(.caption.monospaced())
                                         .foregroundColor(.secondary)
                                 }
                                 Spacer()
@@ -470,7 +470,7 @@ struct IncidentBanner: View {
                     Text("·")
                     Text(relativeTime(record.date))
                 }
-                .font(.system(.caption, design: .monospaced))
+                .font(.caption.monospaced())
                 .foregroundColor(.white.opacity(0.9))
             }
             Spacer()
@@ -513,7 +513,7 @@ struct EventRow: View {
                 
                 HStack(spacing: 6) {
                     Text(record.senderName)
-                        .font(.system(.caption, design: .monospaced))
+                        .font(.caption.monospaced())
                     if let myLoc = mesh.lastKnownLocation {
                         let dist = BluetoothMeshService.haversineMeters(lat1: myLoc.lat, lon1: myLoc.lon, lat2: record.latitude, lon2: record.longitude)
                         Text("· \(Int(dist))m")
@@ -596,7 +596,7 @@ struct ProfileView: View {
                         } label: {
                             HStack {
                                 Text(KeyManager.fingerprint(KeyManager.publicKeyData, length: 20))
-                                    .font(.system(.caption, design: .monospaced))
+                                    .font(.caption.monospaced())
                                 if showCopiedAlert {
                                     Image(systemName: "checkmark")
                                         .font(.caption)
@@ -713,7 +713,7 @@ private struct ExpiryRow: View {
             Text(label)
             Spacer()
             Text("\(Int(duration / 60))m" + (suffix.map { " \($0)" } ?? ""))
-                .font(.system(.body, design: .monospaced))
+                .font(.body.monospaced())
                 .foregroundColor(.secondary)
         }
         .padding()
