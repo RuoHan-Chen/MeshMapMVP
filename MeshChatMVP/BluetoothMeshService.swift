@@ -86,14 +86,6 @@ final class BluetoothMeshService: NSObject, ObservableObject {
     private var pruneTimer: Timer?
     /// Single upsert map for discovered peers (avoids duplicate rows from concurrent main-queue updates).
     private var discoveredPeerById: [UUID: DiscoveredPeer] = [:]
-    /// Chat history TTL (persisted messages older than this are dropped).
-    private let chatHistoryTTLSeconds: TimeInterval = 20 * 60
-    private var chatHistoryURL: URL {
-        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("MeshChatMVP", isDirectory: true)
-            .appendingPathComponent("chat_history.json")
-    }
-
     private var scanIdleWorkItem: DispatchWorkItem?
     private var scanCountdownTimer: Timer?
     private var nextScanDeadline: Date?
@@ -129,9 +121,7 @@ final class BluetoothMeshService: NSObject, ObservableObject {
         locationManager.desiredAccuracy = kCLLocationAccuracyHundredMeters
         locationManager.requestWhenInUseAuthorization()
         startPruneTimer()
-        loadChatHistory()
         requestNotificationAuthIfNeeded()
-        startChatHistoryPruneTimer()
     }
 
     deinit {
@@ -907,77 +897,6 @@ final class BluetoothMeshService: NSObject, ObservableObject {
 
     private func appendChatMessage(_ m: ChatMessage) {
         chatMessages.append(m)
-        pruneChatByTTL()
-        saveChatHistory()
-    }
-
-    private func pruneChatByTTL() {
-        let cutoff = Date().addingTimeInterval(-chatHistoryTTLSeconds)
-        chatMessages.removeAll { $0.date < cutoff }
-    }
-
-    private func loadChatHistory() {
-        let dir = chatHistoryURL.deletingLastPathComponent()
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        guard let data = try? Data(contentsOf: chatHistoryURL),
-              let decoded = try? JSONDecoder().decode([ChatMessage].self, from: data)
-        else { return }
-        let cutoff = Date().addingTimeInterval(-chatHistoryTTLSeconds)
-        let fresh = decoded.filter { $0.date >= cutoff }.map { m -> ChatMessage in
-            guard m.imageJPEGBase64 != nil else { return m }
-            let label = m.text.isEmpty ? "[photo]" : m.text
-            return ChatMessage(
-                id: m.id, envelopeId: m.envelopeId, senderID: m.senderID, senderName: m.senderName,
-                text: label, date: m.date, isLocal: m.isLocal, distanceFromMe: m.distanceFromMe,
-                imageJPEGBase64: nil
-            )
-        }
-        DispatchQueue.main.async { [weak self] in
-            self?.chatMessages = fresh
-        }
-    }
-
-    private func saveChatHistory() {
-        pruneChatByTTL()
-        let dir = chatHistoryURL.deletingLastPathComponent()
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        // Never persist image bytes — only placeholders (text) go to disk.
-        let forDisk: [ChatMessage] = chatMessages.map { m in
-            let label: String
-            if m.imageJPEGBase64 != nil {
-                if m.text == "Photo" || m.text == "[photo]" || m.text.hasPrefix("Photo") {
-                    label = "[photo]"
-                } else {
-                    label = m.text.isEmpty ? "[photo]" : m.text
-                }
-            } else {
-                label = m.text
-            }
-            return ChatMessage(
-                id: m.id,
-                envelopeId: m.envelopeId,
-                senderID: m.senderID,
-                senderName: m.senderName,
-                text: label,
-                date: m.date,
-                isLocal: m.isLocal,
-                distanceFromMe: m.distanceFromMe,
-                imageJPEGBase64: nil
-            )
-        }
-        if let data = try? JSONEncoder().encode(forDisk) {
-            try? data.write(to: chatHistoryURL, options: .atomic)
-        }
-    }
-
-    private func startChatHistoryPruneTimer() {
-        DispatchQueue.main.async { [weak self] in
-            Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
-                guard let self else { return }
-                self.pruneChatByTTL()
-                self.saveChatHistory()
-            }
-        }
     }
 
     private func requestNotificationAuthIfNeeded() {
