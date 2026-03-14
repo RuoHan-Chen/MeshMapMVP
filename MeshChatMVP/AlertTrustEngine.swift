@@ -1,6 +1,6 @@
 import Foundation
 
-// MARK: - Output types
+// MARK: - Output types (DB alerts)
 
 struct ScoredAlert {
     let alert: Alert
@@ -13,6 +13,21 @@ struct AlertCluster: Identifiable {
 
     var clusterScore: Double { alerts.reduce(0) { $0 + $1.score } }
     var leadAlert: Alert { alerts.max(by: { $0.score < $1.score })!.alert }
+}
+
+// MARK: - Output types (map labels)
+
+struct ScoredLabel {
+    let payload: MapLabelPayload
+    let score: Double
+}
+
+struct LabelEventCluster: Identifiable {
+    let id = UUID()
+    let labels: [ScoredLabel]
+
+    var clusterScore: Double { labels.reduce(0) { $0 + $1.score } }
+    var leadLabel: MapLabelPayload { labels.max(by: { $0.score < $1.score })!.payload }
 }
 
 // MARK: - Engine
@@ -60,12 +75,16 @@ enum AlertTrustEngine {
         vouches: [Vouch],
         relationships: [String: String],
         sightings: [String: NodeSighting],
+        myDeviceID: String = "",
         now: Date = Date()
     ) -> Double {
         let age   = now.timeIntervalSince1970 - Double(alert.createdAt)
         let decay = exp(-decayLambda * max(0.0, age))
 
-        let rAuthor = relationshipMultiplier(relationships[alert.authorID])
+        // Own alerts always get friend-level trust for R.
+        let rAuthor = alert.authorID == myDeviceID
+            ? rFriend
+            : relationshipMultiplier(relationships[alert.authorID])
         var total   = wAuthor * rAuthor
 
         for vouch in vouches {
@@ -113,6 +132,81 @@ enum AlertTrustEngine {
             }
 
             clusters.append(AlertCluster(alerts: members))
+        }
+
+        return clusters.sorted { $0.clusterScore > $1.clusterScore }
+    }
+
+    // MARK: - Label score
+
+    /// Same formula as `score(alert:…)` but takes raw map label data.
+    /// - Parameters:
+    ///   - authorID: `MapLabelPayload.senderID`
+    ///   - timestampMs: `MapLabelPayload.timestamp` (milliseconds since epoch)
+    ///   - votes: `labelVotes[id]` — voucherID → 1 (confirm) or −1 (deny)
+    static func scoreLabel(
+        authorID: String,
+        lat: Double,
+        lon: Double,
+        timestampMs: UInt64,
+        votes: [String: Int],
+        relationships: [String: String],
+        sightings: [String: NodeSighting],
+        myDeviceID: String = "",
+        now: Date = Date()
+    ) -> Double {
+        let createdAt = Double(timestampMs) / 1000.0
+        let age       = now.timeIntervalSince1970 - createdAt
+        let decay     = exp(-decayLambda * max(0.0, age))
+
+        let rAuthor = authorID == myDeviceID
+            ? rFriend
+            : relationshipMultiplier(relationships[authorID])
+        var total = wAuthor * rAuthor
+
+        for (voucherID, vote) in votes {
+            let r = relationshipMultiplier(relationships[voucherID])
+            let p = proximityMultiplier(alertLat: lat, alertLon: lon, sighting: sightings[voucherID])
+            if vote > 0 {
+                total += wVouch * r * p
+            } else {
+                total -= wDeny  * r * p
+            }
+        }
+
+        return total * decay
+    }
+
+    // MARK: - Label clustering
+
+    /// Same greedy clustering as `cluster(scoredAlerts:)` but for map labels.
+    static func clusterLabels(scoredLabels: [ScoredLabel]) -> [LabelEventCluster] {
+        var remaining = scoredLabels
+        var clusters: [LabelEventCluster] = []
+
+        while !remaining.isEmpty {
+            let seed    = remaining.removeFirst()
+            var members = [seed]
+            var i       = 0
+
+            while i < remaining.count {
+                let candidate = remaining[i]
+                let dist = haversineMeters(
+                    lat1: seed.payload.lat, lon1: seed.payload.lon,
+                    lat2: candidate.payload.lat, lon2: candidate.payload.lon
+                )
+                let timeDiff = abs(
+                    Double(seed.payload.timestamp) / 1000.0 -
+                    Double(candidate.payload.timestamp) / 1000.0
+                )
+                if dist <= clusterRadiusMeters && timeDiff <= clusterTimeWindowSeconds {
+                    members.append(remaining.remove(at: i))
+                } else {
+                    i += 1
+                }
+            }
+
+            clusters.append(LabelEventCluster(labels: members))
         }
 
         return clusters.sorted { $0.clusterScore > $1.clusterScore }

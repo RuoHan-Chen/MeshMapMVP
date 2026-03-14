@@ -162,7 +162,7 @@ public struct MapLabelImageChunkPayload: Codable, Equatable {
     }
 }
 
-/// In-memory label with vote counts for display (confidence score).
+/// In-memory label scored by the trust engine.
 public struct MapLabelRecord: Identifiable, Equatable {
     public let id: UUID
     public let category: LabelCategory
@@ -171,8 +171,8 @@ public struct MapLabelRecord: Identifiable, Equatable {
     public let senderID: String
     public let senderName: String
     public let date: Date
-    public var upVotes: Int
-    public var downVotes: Int
+    /// Trust score computed by AlertTrustEngine (unbounded; higher = more trusted).
+    public var trustScore: Double
     /// Custom name set by user (for hazard/help/other); nil uses category default.
     public let customLabelName: String?
     /// Optional description.
@@ -190,12 +190,6 @@ public struct MapLabelRecord: Identifiable, Equatable {
     public var systemImage: String {
         if let img = customSystemImage, !img.isEmpty { return img }
         return category.systemImage
-    }
-
-    public var confidenceScore: Double {
-        let total = upVotes + downVotes
-        guard total > 0 else { return 0.5 }
-        return Double(upVotes) / Double(total)
     }
 
     public var coordinate: CLLocationCoordinate2D {
@@ -217,8 +211,7 @@ public struct MapLabelRecord: Identifiable, Equatable {
         senderID: String,
         senderName: String,
         date: Date,
-        upVotes: Int,
-        downVotes: Int,
+        trustScore: Double = 0,
         customLabelName: String? = nil,
         customDescription: String? = nil,
         customSystemImage: String? = nil
@@ -230,8 +223,7 @@ public struct MapLabelRecord: Identifiable, Equatable {
         self.senderID = senderID
         self.senderName = senderName
         self.date = date
-        self.upVotes = upVotes
-        self.downVotes = downVotes
+        self.trustScore = trustScore
         self.customLabelName = customLabelName
         self.customDescription = customDescription
         self.customSystemImage = customSystemImage
