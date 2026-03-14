@@ -96,8 +96,16 @@ struct DebugDashboardView: View {
                     }
                 }
 
-                Section {
-                    Button("Clear log", role: .destructive) { mesh.clearDebugLog() }
+                Section("Maintenance (local only)") {
+                    Button("Clear chat messages", role: .destructive) {
+                        mesh.clearChatMessages()
+                    }
+                    Button("Clear map events", role: .destructive) {
+                        mesh.clearLocalEvents()
+                    }
+                    Button("Clear log", role: .destructive) {
+                        mesh.clearDebugLog()
+                    }
                 }
 
                 Section("Log") {

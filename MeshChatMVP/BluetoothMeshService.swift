@@ -383,6 +383,21 @@ final class BluetoothMeshService: NSObject, ObservableObject {
         }
     }
 
+    /// Remove all chat messages from this device only.
+    func clearChatMessages() {
+        DispatchQueue.main.async { [weak self] in
+            self?.chatMessages = []
+        }
+    }
+
+    /// Remove all map labels and votes from this device only.
+    func clearLocalEvents() {
+        DispatchQueue.main.async { [weak self] in
+            self?.mapLabels.removeAll()
+            self?.labelVotes.removeAll()
+        }
+    }
+
     // MARK: - Periodic scan (low duty cycle)
 
     private func cancelScanSchedule() {

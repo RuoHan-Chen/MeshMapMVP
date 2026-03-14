@@ -23,6 +23,7 @@ struct MapTabView: View {
     @State private var showCooldownAlert = false
     @State private var showTooFarAlert = false
     @State private var selectedLabel: MapLabelRecord?
+    @State private var selectedCluster: LabelCluster?
 
     /// Labels built from mesh.mapLabels + mesh.labelVotes; filtered to within 5km and not expired.
     private var labelRecords: [MapLabelRecord] {
@@ -70,10 +71,47 @@ struct MapTabView: View {
         return dist <= Self.maxLabelDistanceMeters
     }
 
-    /// Combined annotations: transmitters + labels (single list for Map).
+    /// Clustered labels so nearby events share one pin.
+    private var labelClusters: [LabelCluster] {
+        var clusters: [LabelCluster] = []
+        let radiusMeters = 60.0
+        for record in labelRecords {
+            var placed = false
+            for idx in clusters.indices {
+                let center = clusters[idx].coordinate
+                let dist = BluetoothMeshService.haversineMeters(
+                    lat1: center.latitude,
+                    lon1: center.longitude,
+                    lat2: record.latitude,
+                    lon2: record.longitude
+                )
+                if dist <= radiusMeters {
+                    clusters[idx].records.append(record)
+                    let all = clusters[idx].records
+                    let avgLat = all.map { $0.latitude }.reduce(0, +) / Double(all.count)
+                    let avgLon = all.map { $0.longitude }.reduce(0, +) / Double(all.count)
+                    clusters[idx].coordinate = CLLocationCoordinate2D(latitude: avgLat, longitude: avgLon)
+                    placed = true
+                    break
+                }
+            }
+            if !placed {
+                clusters.append(
+                    LabelCluster(
+                        id: record.id,
+                        coordinate: record.coordinate,
+                        records: [record]
+                    )
+                )
+            }
+        }
+        return clusters
+    }
+
+    /// Combined annotations: transmitters + clustered labels (single list for Map).
     private var combinedAnnotations: [MapAnnotationItem] {
         let transmitterItems = annotationItems.map { MapAnnotationItem.transmitter($0) }
-        let labelItems = labelRecords.map { MapAnnotationItem.label($0) }
+        let labelItems = labelClusters.map { MapAnnotationItem.labelCluster($0) }
         return transmitterItems + labelItems
     }
 
@@ -131,19 +169,25 @@ struct MapTabView: View {
                                 }
                                 .padding(6)
                                 .background(.background, in: RoundedRectangle(cornerRadius: 8))
-                            case .label(let record):
+                            case .labelCluster(let cluster):
+                                let sorted = cluster.records.sorted { $0.confidenceScore > $1.confidenceScore }
+                                let top = sorted.first!
                                 Button {
-                                    selectedLabel = record
+                                    if sorted.count == 1 {
+                                        selectedLabel = top
+                                    } else {
+                                        selectedCluster = cluster
+                                    }
                                 } label: {
                                     VStack(spacing: 2) {
-                                        Image(systemName: record.systemImage)
+                                        Image(systemName: top.systemImage)
                                             .font(.title2)
-                                            .foregroundStyle(eventColor(for: record))
-                                        Text(record.displayName)
+                                            .foregroundStyle(eventColor(for: top))
+                                        Text(top.displayName)
                                             .font(.caption2)
                                             .lineLimit(1)
                                             .multilineTextAlignment(.center)
-                                        Text(relativeTime(record.date))
+                                        Text("\(sorted.count) events · top \(String(format: "%.0f%%", top.confidenceScore * 100))")
                                             .font(.caption2)
                                             .foregroundStyle(.secondary)
                                     }
@@ -269,6 +313,15 @@ struct MapTabView: View {
                     selectedLabel: $selectedLabel
                 )
             }
+            .sheet(item: $selectedCluster) { cluster in
+                ClusterListSheet(
+                    cluster: cluster,
+                    onSelectRecord: { record in
+                        selectedLabel = record
+                    },
+                    selectedCluster: $selectedCluster
+                )
+            }
         }
     }
 
@@ -355,24 +408,31 @@ private struct TransmitterPin: Identifiable {
     let isCurrentUser: Bool
 }
 
-/// Unified map annotation: transmitter or label (for single Map annotationItems array).
+/// Unified map annotation: transmitter or clustered labels.
 private enum MapAnnotationItem: Identifiable {
     case transmitter(TransmitterPin)
-    case label(MapLabelRecord)
+    case labelCluster(LabelCluster)
 
     var id: String {
         switch self {
         case .transmitter(let p): return "tx-\(p.id)"
-        case .label(let l): return "label-\(l.id.uuidString)"
+        case .labelCluster(let c): return "cluster-\(c.id.uuidString)"
         }
     }
 
     var coordinate: CLLocationCoordinate2D {
         switch self {
         case .transmitter(let p): return p.coordinate
-        case .label(let l): return l.coordinate
+        case .labelCluster(let c): return c.coordinate
         }
     }
+}
+
+/// Cluster of nearby labels that share one pin.
+private struct LabelCluster: Identifiable {
+    let id: UUID
+    var coordinate: CLLocationCoordinate2D
+    var records: [MapLabelRecord]
 }
 
 // MARK: - Compass (direction user is pointed)
@@ -628,6 +688,73 @@ private struct LabelVoteSheet: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") {
                         selectedLabel = nil
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Shows all labels in a cluster, ranked by confidence score.
+private struct ClusterListSheet: View {
+    let cluster: LabelCluster
+    let onSelectRecord: (MapLabelRecord) -> Void
+    @Binding var selectedCluster: LabelCluster?
+    @Environment(\.dismiss) private var dismiss
+
+    private var sortedRecords: [MapLabelRecord] {
+        cluster.records.sorted { $0.confidenceScore > $1.confidenceScore }
+    }
+
+    private func rowColor(for record: MapLabelRecord) -> Color {
+        let score = record.confidenceScore
+        let red = min(1, score * 2)
+        let green = min(1, (1 - score) * 2)
+        return Color(red: red, green: green, blue: 0.2)
+    }
+
+    private func relativeTime(_ date: Date) -> String {
+        let s = Date().timeIntervalSince(date)
+        if s < 60 { return "now" }
+        if s < 3600 { return "\(Int(s / 60))m ago" }
+        if s < 86400 { return "\(Int(s / 3600))h ago" }
+        return "\(Int(s / 86400))d ago"
+    }
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section("Events near this location") {
+                    ForEach(sortedRecords, id: \.id) { record in
+                        Button {
+                            onSelectRecord(record)
+                            dismiss()
+                        } label: {
+                            HStack {
+                                Image(systemName: record.systemImage)
+                                    .foregroundStyle(rowColor(for: record))
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(record.displayName)
+                                    if let desc = record.customDescription, !desc.isEmpty {
+                                        Text(desc)
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    Text("\(relativeTime(record.date)) · \(String(format: "%.0f%%", record.confidenceScore * 100))")
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            .navigationTitle("Nearby events")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") {
+                        selectedCluster = nil
                     }
                 }
             }
