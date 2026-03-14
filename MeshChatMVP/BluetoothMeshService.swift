@@ -8,14 +8,15 @@ import UIKit
 private let kMeshServiceUUID = CBUUID(string: "6E400001-B5A3-F393-E0A9-E50E24DCCA9E")
 private let kMeshCharUUID = CBUUID(string: "6E400002-B5A3-F393-E0A9-E50E24DCCA9E")
 
-/// Discovered peripheral shown in UI.
-struct DiscoveredPeer: Identifiable, Equatable {
+/// Discovered peripheral shown in UI. **publicKey** set after direct announce (canonical contact id).
+struct DiscoveredPeer: Identifiable, Equatable, Hashable {
     let id: UUID
     var name: String
     var rssi: Int
     var nickname: String?
-    /// Best-effort: auto / manual / connected
     var linkState: String
+    var publicKey: Data?
+    var lastSeen: Int64
 }
 
 /// One row for the debug dashboard.
@@ -36,6 +37,8 @@ final class BluetoothMeshService: NSObject, ObservableObject {
     @Published var debugLines: [String] = []
     @Published var identity: DeviceIdentity
     @Published var announceNicknames: [String: String] = [:]
+    /// Bump so dashboard/contacts reload after save.
+    @Published var contactsVersion = UUID()
     /// Last known coordinates for distance display; updated when shareLocation is on.
     @Published private(set) var lastKnownLocation: (lat: Double, lon: Double)?
     /// Sender ID → (lat, lon) from received envelopes (only when senders share location).
@@ -60,6 +63,15 @@ final class BluetoothMeshService: NSObject, ObservableObject {
 
     @Published private(set) var subscribedCentralCount: Int = 0
     @Published private(set) var readyRemoteCount: Int = 0
+
+    /// Group chat label: saved contact nickname if we know this sender's key; else announce / envelope name.
+    func senderDisplayName(senderID: String, fallbackSenderName: String) -> String {
+        if senderID == identity.deviceID { return identity.nickname }
+        if let nick = DatabaseManager.shared.savedNickname(forSenderID: senderID) {
+            return nick
+        }
+        return announceNicknames[senderID] ?? fallbackSenderName
+    }
 
     private let central: CBCentralManager
     private let peripheral: CBPeripheralManager
@@ -86,6 +98,8 @@ final class BluetoothMeshService: NSObject, ObservableObject {
     private var pruneTimer: Timer?
     /// Single upsert map for discovered peers (avoids duplicate rows from concurrent main-queue updates).
     private var discoveredPeerById: [UUID: DiscoveredPeer] = [:]
+    /// Peripheral id → peer Curve25519 public key (from announce on that link).
+    private var peerPublicKeyByPeripheralId: [UUID: Data] = [:]
     /// Chat history TTL (persisted messages older than this are dropped).
     private let chatHistoryTTLSeconds: TimeInterval = 20 * 60
     private var chatHistoryURL: URL {
@@ -119,6 +133,7 @@ final class BluetoothMeshService: NSObject, ObservableObject {
     private var mapLabelCooldownTimer: Timer?
 
     override init() {
+        _ = KeyManager.publicKeyData
         identity = DeviceIdentity.load()
         central = CBCentralManager(delegate: nil, queue: bleQueue, options: [CBCentralManagerOptionShowPowerAlertKey: true])
         peripheral = CBPeripheralManager(delegate: nil, queue: bleQueue)
@@ -715,6 +730,22 @@ final class BluetoothMeshService: NSObject, ObservableObject {
         switch env.type {
         case .announce:
             if let a = try? JSONDecoder().decode(AnnouncementPayload.self, from: env.payload) {
+                var pk: Data?
+                if let b64 = a.publicKeyBase64, let d = Data(base64Encoded: b64), d.count == 32 { pk = d }
+                else { pk = KeyManager.decodePublicKeyBase64(env.senderID) }
+                if let key = pk, let peripheral = sourcePeripheral {
+                    peerPublicKeyByPeripheralId[peripheral.identifier] = key
+                    try? DatabaseManager.shared.updateLastSeenForPublicKey(key)
+                    DispatchQueue.main.async { [weak self] in
+                        self?.publishDiscoveredPeer(
+                            id: peripheral.identifier,
+                            name: peripheral.name ?? a.nickname,
+                            rssi: 0,
+                            linkState: self?.discoveredPeerById[peripheral.identifier]?.linkState ?? "discovered",
+                            publicKey: key
+                        )
+                    }
+                }
                 DispatchQueue.main.async { [weak self] in
                     self?.announceNicknames[env.senderID] = a.nickname
                 }
@@ -1017,7 +1048,11 @@ final class BluetoothMeshService: NSObject, ObservableObject {
 
     /// Build announce envelope on main so we can include location if shareLocation is on.
     private func buildAnnounceEnvelope() -> MeshEnvelope? {
-        guard let nickData = try? JSONEncoder().encode(AnnouncementPayload(nickname: identity.nickname)) else { return nil }
+        let payload = AnnouncementPayload(
+            nickname: identity.nickname,
+            publicKeyBase64: KeyManager.publicKeyData.base64EncodedString()
+        )
+        guard let nickData = try? JSONEncoder().encode(payload) else { return nil }
         var env = MeshEnvelope(
             id: UUID(),
             type: .announce,
@@ -1096,15 +1131,23 @@ final class BluetoothMeshService: NSObject, ObservableObject {
         }
     }
 
-    private func publishDiscoveredPeer(id: UUID, name: String, rssi: Int, linkState: String) {
+    func publishDiscoveredPeer(id: UUID, name: String, rssi: Int, linkState: String, publicKey: Data? = nil) {
+        let now = Int64(Date().timeIntervalSince1970)
+        let pk = publicKey ?? peerPublicKeyByPeripheralId[id]
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
-            var p = self.discoveredPeerById[id] ?? DiscoveredPeer(id: id, name: name, rssi: rssi, nickname: nil, linkState: linkState)
+            var p = self.discoveredPeerById[id] ?? DiscoveredPeer(
+                id: id, name: name, rssi: rssi, nickname: nil, linkState: linkState, publicKey: nil, lastSeen: now
+            )
             p.name = name
             p.rssi = rssi
             p.linkState = linkState
+            if let k = pk { p.publicKey = k }
+            p.lastSeen = now
             self.discoveredPeerById[id] = p
-            self.discoveredPeers = self.discoveredPeerById.values.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+            self.discoveredPeers = self.discoveredPeerById.values.sorted {
+                $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
+            }
         }
     }
 }

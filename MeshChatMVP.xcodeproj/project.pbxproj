@@ -31,6 +31,10 @@
 		A100001A /* AlertPayload.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000025 /* AlertPayload.swift */; };
 		A100001B /* VouchPayload.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000026 /* VouchPayload.swift */; };
 		A100001C /* DatabaseManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000027 /* DatabaseManager.swift */; };
+		A1000028 /* KeyManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000028 /* KeyManager.swift */; };
+		A1000029 /* SavedContact.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000029 /* SavedContact.swift */; };
+		A100002A /* ContactEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200002A /* ContactEditorView.swift */; };
+		A100002B /* ContactsListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200002B /* ContactsListView.swift */; };
 		D974FBAF2F651AD7008F4874 /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = D974FBAE2F651AD7008F4874 /* GRDB */; };
 /* End PBXBuildFile section */
 
@@ -60,6 +64,10 @@
 		A2000025 /* AlertPayload.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlertPayload.swift; sourceTree = "<group>"; };
 		A2000026 /* VouchPayload.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VouchPayload.swift; sourceTree = "<group>"; };
 		A2000027 /* DatabaseManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DatabaseManager.swift; sourceTree = "<group>"; };
+		A2000028 /* KeyManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyManager.swift; sourceTree = "<group>"; };
+		A2000029 /* SavedContact.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavedContact.swift; sourceTree = "<group>"; };
+		A200002A /* ContactEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactEditorView.swift; sourceTree = "<group>"; };
+		A200002B /* ContactsListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactsListView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -108,6 +116,10 @@
 				A2000025 /* AlertPayload.swift */,
 				A2000026 /* VouchPayload.swift */,
 				A2000027 /* DatabaseManager.swift */,
+				A2000028 /* KeyManager.swift */,
+				A2000029 /* SavedContact.swift */,
+				A200002A /* ContactEditorView.swift */,
+				A200002B /* ContactsListView.swift */,
 				A200000A /* Assets.xcassets */,
 			);
 			path = MeshChatMVP;
@@ -216,6 +228,10 @@
 				A100001A /* AlertPayload.swift in Sources */,
 				A100001B /* VouchPayload.swift in Sources */,
 				A100001C /* DatabaseManager.swift in Sources */,
+				A1000028 /* KeyManager.swift in Sources */,
+				A1000029 /* SavedContact.swift in Sources */,
+				A100002A /* ContactEditorView.swift in Sources */,
+				A100002B /* ContactsListView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
