@@ -322,6 +322,18 @@ final class BluetoothMeshService: NSObject, ObservableObject {
         guard !envelopes.isEmpty else { return }
         let firstEnv = envelopes[0]
         let imageB64 = jpegData.base64EncodedString()
+        let persisted = PersistedMessage(
+            id: firstEnv.id.uuidString,
+            senderID: firstEnv.senderID,
+            senderName: firstEnv.senderName,
+            text: "[photo]",
+            timestamp: Int64(firstEnv.timestamp),
+            channel: "broadcast",
+            receivedAt: Int64(Date().timeIntervalSince1970),
+            imageBase64: imageB64
+        )
+        try? DatabaseManager.shared.upsertContact(id: identity.deviceID, nickname: identity.nickname)
+        try? DatabaseManager.shared.saveMessage(persisted)
         bleQueue.async { [weak self] in
             guard let self else { return }
             for env in envelopes {
@@ -879,6 +891,18 @@ final class BluetoothMeshService: NSObject, ObservableObject {
         guard full.count > 100 else { return } // min sane JPEG
         let distance = distanceFromMe(senderID: env.senderID)
         let b64 = full.base64EncodedString()
+        let persisted = PersistedMessage(
+            id: env.id.uuidString,
+            senderID: env.senderID,
+            senderName: env.senderName,
+            text: "[photo]",
+            timestamp: Int64(env.timestamp),
+            channel: "broadcast",
+            receivedAt: Int64(Date().timeIntervalSince1970),
+            imageBase64: b64
+        )
+        try? DatabaseManager.shared.upsertContact(id: env.senderID, nickname: env.senderName)
+        try? DatabaseManager.shared.saveMessage(persisted)
         appendChatMessage(
             ChatMessage(
                 id: UUID(),
