@@ -431,16 +431,49 @@ struct MapTabView: View {
         }
     }
 
-    /// Build map export (events + network members) and present share sheet (for edge nodes to share with outside world).
+    /// Build map export (events + network members) and present share sheet.
+    /// Exports a single self-contained HTML file with an embedded Leaflet map and event photos.
     private func prepareAndShareMap() {
-        let export = MapExport(
-            version: 1,
-            exportDate: ISO8601DateFormatter().string(from: Date()),
-            exporterName: mesh.identity.nickname,
-            members: buildExportMembers(),
-            events: buildExportEvents()
-        )
-        guard let data = try? JSONEncoder().encode(export),
+        let members = buildExportMembers()
+        let events = buildExportEvents()
+
+        // Build a lightweight JSON payload we embed as text in the HTML.
+        var memberDicts: [[String: Any]] = []
+        for m in members {
+            memberDicts.append([
+                "id": m.id,
+                "name": m.name,
+                "latitude": m.latitude,
+                "longitude": m.longitude
+            ])
+        }
+
+        var eventDicts: [[String: Any]] = []
+        for e in events {
+            var dict: [String: Any] = [
+                "id": e.id,
+                "name": e.name,
+                "category": e.category,
+                "latitude": e.latitude,
+                "longitude": e.longitude,
+                "date": e.date
+            ]
+            if let d = e.eventDescription { dict["description"] = d }
+            if let icon = e.icon { dict["icon"] = icon }
+            if let eventId = UUID(uuidString: e.id), let thumb = mesh.thumbnails[eventId] {
+                dict["thumbnailDataURI"] = "data:image/jpeg;base64,\(thumb.base64EncodedString())"
+            }
+            eventDicts.append(dict)
+        }
+
+        let payload: [String: Any] = [
+            "exporter": mesh.identity.nickname,
+            "exportDate": ISO8601DateFormatter().string(from: Date()),
+            "members": memberDicts,
+            "events": eventDicts
+        ]
+
+        guard let data = try? JSONSerialization.data(withJSONObject: payload),
               let jsonString = String(data: data, encoding: .utf8) else { return }
 
         let html = """
@@ -450,54 +483,78 @@ struct MapTabView: View {
           <meta charset="utf-8" />
           <title>MeshMap Export</title>
           <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-          <link
-            rel="stylesheet"
-            href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-            integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
-            crossorigin=""
-          />
+          <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
           <style>
             html, body, #map { height: 100%; margin: 0; padding: 0; }
+            .popup-img { max-width: 220px; display: block; margin-top: 4px; border-radius: 6px; }
           </style>
         </head>
         <body>
           <div id="map"></div>
-          <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-            integrity="sha256-20nQCchB9co0qIJbrJ7CkJ8M5LQ8sET33Uz6DpGSo1A="
-            crossorigin=""></script>
+          <pre id="mesh-data" style="display:none">
+        \(jsonString)
+          </pre>
+          <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
           <script>
-            const data = \(jsonString);
-            const map = L.map('map');
-            let bounds;
-
-            function addMarker(lat, lon, label) {
-              const m = L.marker([lat, lon]).addTo(map).bindPopup(label);
-              if (!bounds) {
-                bounds = L.latLngBounds([lat, lon], [lat, lon]);
-              } else {
-                bounds.extend([lat, lon]);
+            (function() {
+              var pre = document.getElementById('mesh-data');
+              if (!pre) { return; }
+              var raw = pre.textContent || pre.innerText || '';
+              var data;
+              try {
+                data = JSON.parse(raw);
+              } catch (e) {
+                console.error('Failed to parse mesh export data', e, raw);
+                return;
               }
-            }
 
-            data.members.forEach(m => {
-              addMarker(m.latitude, m.longitude, `Member: ${m.name}`);
-            });
+              var map = L.map('map');
+              var bounds = null;
 
-            data.events.forEach(e => {
-              const label = `${e.name || e.category} (${e.category})`;
-              addMarker(e.latitude, e.longitude, label);
-            });
+              function extendBounds(lat, lon) {
+                if (!bounds) {
+                  bounds = L.latLngBounds([lat, lon], [lat, lon]);
+                } else {
+                  bounds.extend([lat, lon]);
+                }
+              }
 
-            if (bounds) {
-              map.fitBounds(bounds.pad(0.2));
-            } else {
-              map.setView([0, 0], 2);
-            }
+              (data.members || []).forEach(function(m) {
+                var marker = L.marker([m.latitude, m.longitude]).addTo(map);
+                marker.bindPopup('<strong>Member</strong><br/>' + (m.name || ''));
+                extendBounds(m.latitude, m.longitude);
+              });
 
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-              maxZoom: 19,
-              attribution: '&copy; OpenStreetMap contributors'
-            }).addTo(map);
+              (data.events || []).forEach(function(e) {
+                var html = '<strong>' + (e.name || e.category || 'Event') + '</strong>';
+                if (e.category) {
+                  html += '<br/><em>' + e.category + '</em>';
+                }
+                if (e.description) {
+                  html += '<br/>' + e.description;
+                }
+                if (e.thumbnailDataURI) {
+                  html += '<br/><img class="popup-img" src="' + e.thumbnailDataURI + '" alt="photo" />';
+                }
+                if (e.date) {
+                  html += '<br/><small>' + e.date + '</small>';
+                }
+                var marker = L.marker([e.latitude, e.longitude]).addTo(map);
+                marker.bindPopup(html);
+                extendBounds(e.latitude, e.longitude);
+              });
+
+              if (bounds) {
+                map.fitBounds(bounds.pad(0.2));
+              } else {
+                map.setView([0, 0], 2);
+              }
+
+              L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 19,
+                attribution: '&copy; OpenStreetMap contributors'
+              }).addTo(map);
+            })();
           </script>
         </body>
         </html>
