@@ -15,6 +15,9 @@ struct ContentView: View {
             DebugDashboardView()
                 .tabItem { Label("Dashboard", systemImage: "square.grid.2x2") }
 
+            ContactsListView()
+                .tabItem { Label("Contacts", systemImage: "person.2") }
+
             ProfileView()
                 .tabItem { Label("You", systemImage: "person.circle") }
         }
@@ -39,10 +42,15 @@ private struct ProfileView: View {
                         id.nickname = nicknameEditor.isEmpty ? id.nickname : nicknameEditor
                         mesh.updateIdentity(id)
                     }
-                    LabeledContent("Device ID") {
-                        Text(mesh.identity.deviceID)
-                            .font(.caption)
-                            .textSelection(.enabled)
+                    LabeledContent("Public key (mesh id)") {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(KeyManager.fingerprint(KeyManager.publicKeyData, length: 12))
+                                .font(.caption.monospaced())
+                            Text(mesh.identity.deviceID)
+                                .font(.caption2)
+                                .textSelection(.enabled)
+                                .foregroundStyle(.secondary)
+                        }
                     }
                 }
                 Section("Privacy") {

@@ -75,7 +75,75 @@ final class DatabaseManager {
             }
         }
 
+        migrator.registerMigration("v3_saved_contacts") { db in
+            guard try !db.tableExists(SavedContact.databaseTableName) else { return }
+            try db.create(table: SavedContact.databaseTableName) { t in
+                t.primaryKey("id", .text)
+                t.column("nickname", .text).notNull()
+                t.column("relationship", .text).notNull().defaults(to: SavedContact.associate)
+                t.column("firstSeen", .integer).notNull()
+                t.column("lastSeen", .integer).notNull()
+                t.column("publicKey", .blob).notNull()
+            }
+        }
+
         try migrator.migrate(dbQueue)
+    }
+}
+
+// MARK: - Saved contacts (publicKey identity)
+
+extension DatabaseManager {
+    func createContact(_ c: SavedContact) throws {
+        try dbQueue.write { db in try c.insert(db) }
+    }
+
+    func updateContact(_ c: SavedContact) throws {
+        try dbQueue.write { db in try c.update(db) }
+    }
+
+    func findContactByPublicKey(_ key: Data) throws -> SavedContact? {
+        try dbQueue.read { db in
+            try SavedContact.filter(Column("publicKey") == key).fetchOne(db)
+        }
+    }
+
+    /// URL-safe base64 public key — same string as mesh `senderID` / `deviceID`.
+    static func canonicalSenderID(publicKey: Data) -> String {
+        publicKey.base64EncodedString()
+            .replacingOccurrences(of: "+", with: "-")
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: "=", with: "")
+    }
+
+    /// Saved-contact nickname for this mesh sender (public key id), if any.
+    func savedNickname(forSenderID senderID: String) -> String? {
+        let sid = senderID.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !sid.isEmpty else { return nil }
+        if let pk = KeyManager.decodePublicKeyBase64(sid),
+           let c = try? findContactByPublicKey(pk) {
+            return c.nickname
+        }
+        guard let all = try? listContacts() else { return nil }
+        for c in all where Self.canonicalSenderID(publicKey: c.publicKey) == sid {
+            return c.nickname
+        }
+        return nil
+    }
+
+    func listContacts() throws -> [SavedContact] {
+        try dbQueue.read { db in
+            try SavedContact.order(Column("lastSeen").desc).fetchAll(db)
+        }
+    }
+
+    func updateLastSeenForPublicKey(_ key: Data) throws {
+        let now = Int64(Date().timeIntervalSince1970)
+        try dbQueue.write { db in
+            guard var c = try SavedContact.filter(Column("publicKey") == key).fetchOne(db) else { return }
+            c.lastSeen = now
+            try c.update(db)
+        }
     }
 }
 

@@ -147,7 +147,10 @@ struct ChatView: View {
             if m.isLocal { Spacer(minLength: 48) }
             VStack(alignment: m.isLocal ? .trailing : .leading, spacing: 4) {
                 HStack(spacing: 6) {
-                    if !m.isLocal { Text(m.senderName).font(.caption.weight(.semibold)) }
+                    if !m.isLocal {
+                        Text(mesh.senderDisplayName(senderID: m.senderID, fallbackSenderName: m.senderName))
+                            .font(.caption.weight(.semibold))
+                    }
                     Text(m.date, style: .time).font(.caption2).foregroundStyle(.secondary)
                     if m.isLocal { Text("You").font(.caption.weight(.semibold)) }
                 }

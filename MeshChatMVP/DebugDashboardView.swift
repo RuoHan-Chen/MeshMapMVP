@@ -1,9 +1,10 @@
 import SwiftUI
 import CoreBluetooth
 
-/// BLE + mesh diagnostics: scan cycle, peers, log (separate from chat UX).
+/// BLE + mesh diagnostics; peers show **public-key identity** and tap → add/edit contact.
 struct DebugDashboardView: View {
     @EnvironmentObject var mesh: BluetoothMeshService
+    @State private var editorPeer: DiscoveredPeer?
 
     var body: some View {
         NavigationStack {
@@ -38,9 +39,7 @@ struct DebugDashboardView: View {
                             .monospacedDigit()
                             .frame(width: 36, alignment: .trailing)
                     }
-                    Button("Apply timing (next cycle)") {
-                        mesh.syncScanTimingFromUI()
-                    }
+                    Button("Apply timing (next cycle)") { mesh.syncScanTimingFromUI() }
                     LabeledContent("Status") {
                         HStack {
                             Circle()
@@ -55,30 +54,16 @@ struct DebugDashboardView: View {
                         }
                     }
                     Button("Scan now") { mesh.scanNow() }
-                    Text("Disconnect loop fix: GATT is published once — repeated setup no longer kicks subscribers off.")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
                 }
 
-                Section("Peers (one row per device — discovery + link)") {
+                Section("Peers (tap fingerprint to save contact)") {
                     if mesh.discoveredPeers.isEmpty {
-                        Text("No peers in this scan window — both apps must be open; wait for next scan or tap Scan now.")
+                        Text("No peers — both apps open, wait for scan.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     } else {
                         ForEach(mesh.discoveredPeers) { p in
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(p.name).font(.headline)
-                                let centralState = mesh.debugConnectionRows.first(where: { $0.id == p.id })?.state
-                                Text("RSSI \(p.rssi) · \(p.linkState)" + (centralState.map { " · GATT: \($0)" } ?? ""))
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                Text(p.id.uuidString)
-                                    .font(.caption2)
-                                    .foregroundStyle(.tertiary)
-                                    .lineLimit(1)
-                            }
-                            .padding(.vertical, 4)
+                            peerRow(p)
                         }
                     }
                 }
@@ -94,7 +79,64 @@ struct DebugDashboardView: View {
                 }
             }
             .navigationTitle("Dashboard")
+            .sheet(item: $editorPeer) { peer in
+                ContactEditorView(
+                    publicKey: peer.publicKey!,
+                    existing: try? DatabaseManager.shared.findContactByPublicKey(peer.publicKey!)
+                ) {
+                    mesh.contactsVersion = UUID()
+                }
+            }
         }
+    }
+
+    @ViewBuilder
+    private func peerRow(_ p: DiscoveredPeer) -> some View {
+        let pk = p.publicKey
+        let saved = pk.flatMap { try? DatabaseManager.shared.findContactByPublicKey($0) }
+        let displayName = saved?.nickname
+            ?? p.nickname
+            ?? (pk.map { KeyManager.fingerprint($0, length: 8) } ?? p.name)
+        let fingerprint = pk.map { KeyManager.fingerprint($0, length: 8) } ?? "—"
+        let centralState = mesh.debugConnectionRows.first(where: { $0.id == p.id })?.state
+
+        Button {
+            if pk != nil { editorPeer = p }
+        } label: {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Text(displayName)
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+                    if let rel = saved?.relationship {
+                        Text(rel)
+                            .font(.caption2)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Capsule().fill(Color.secondary.opacity(0.2)))
+                    }
+                }
+                Text("RSSI \(p.rssi) · \(p.linkState)" + (centralState.map { " · \($0)" } ?? ""))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                HStack {
+                    Text(fingerprint)
+                        .font(.caption.monospaced())
+                        .foregroundStyle(pk == nil ? Color.secondary : Color.accentColor)
+                    if pk != nil {
+                        Image(systemName: "chevron.right")
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                    }
+                }
+                Text(pk == nil ? "Connect to receive public key (announce)" : "Tap to add or edit contact")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
+            .padding(.vertical, 6)
+        }
+        .buttonStyle(.plain)
+        .disabled(pk == nil)
     }
 
     private func stateLabel(_ s: CBManagerState) -> String {
