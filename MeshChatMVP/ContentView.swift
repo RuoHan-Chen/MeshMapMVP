@@ -297,7 +297,7 @@ struct AlertsFeedView: View {
                 red += 1
             case .checkpoint, .militaryMovement, .policeCrackdown, .arrests:
                 amber += 1
-            case .help, .medical, .other:
+            case .help, .other:
                 green += 1
             }
         }
@@ -549,7 +549,7 @@ struct EventRow: View {
             return .meshAccent
         case .checkpoint, .militaryMovement, .policeCrackdown, .arrests:
             return .meshWarn
-        case .help, .medical, .other:
+        case .help, .other:
             return .meshSuccess
         }
     }
