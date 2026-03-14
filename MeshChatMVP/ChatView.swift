@@ -194,7 +194,7 @@ struct ChatView: View {
 
     private var navTitle: String {
         let u = mesh.contactUnreadTotal
-        if u > 0 { return "Chat · \(u) unread" }
+        if u > 0 { return String(format: String(localized: "Chat · %lld unread"), u) }
         return mesh.identity.nickname
     }
 
@@ -209,7 +209,7 @@ struct ChatView: View {
                     .font(.subheadline.weight(.semibold))
                 Spacer()
                 if mesh.contactUnreadTotal > 0 {
-                    Text("\(mesh.contactUnreadTotal) unread")
+                    Text(String(format: String(localized: "%lld unread"), mesh.contactUnreadTotal))
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(.white)
                         .padding(.horizontal, 8)
@@ -309,7 +309,7 @@ struct ChatView: View {
                         .padding(.vertical, 4)
                         .background(Capsule().fill(Color.green.opacity(0.2)))
                 } else if mesh.secondsUntilNextScan > 0 {
-                    Text("Next scan \(Int(mesh.secondsUntilNextScan))s")
+                    Text(String(format: String(localized: "Next scan %llds"), Int(mesh.secondsUntilNextScan)))
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
@@ -329,7 +329,7 @@ struct ChatView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Sending photo over mesh")
                     .font(.subheadline.weight(.semibold))
-                Text("\(packetCount) packets (~\(BluetoothMeshService.imageChunkByteSize) bytes JPEG each, max \(BluetoothMeshService.meshEnvelopeMaxBytes) B per packet)")
+                Text(String(format: String(localized: "%lld packets (~%lld bytes JPEG each, max %lld B per packet)"), Int64(packetCount), Int64(BluetoothMeshService.imageChunkByteSize), Int64(BluetoothMeshService.meshEnvelopeMaxBytes)))
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             }
@@ -405,8 +405,8 @@ struct ChatView: View {
     }
 
     private func distanceString(_ meters: Double) -> String {
-        if meters < 1000 { return "~\(Int(round(meters))) m away" }
-        return String(format: "~%.1f km away", meters / 1000)
+        if meters < 1000 { return String(format: String(localized: "~%lld m away"), Int64(round(meters))) }
+        return String(format: String(localized: "~%.1f km away"), meters / 1000)
     }
 }
 

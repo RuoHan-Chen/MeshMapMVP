@@ -189,7 +189,7 @@ struct MapTabView: View {
                                             .font(.caption2)
                                             .lineLimit(1)
                                             .multilineTextAlignment(.center)
-                                        Text("\(sorted.count) events · top \(String(format: "%.0f%%", top.confidenceScore * 100))")
+                                        Text(String(format: String(localized: "%lld events · top %@"), Int64(sorted.count), String(format: "%.0f%%", top.confidenceScore * 100)))
                                             .font(.caption2)
                                             .foregroundStyle(.secondary)
                                     }
@@ -272,15 +272,15 @@ struct MapTabView: View {
             }
             .navigationTitle("Map")
             .navigationBarTitleDisplayMode(.inline)
-            .alert("Label cooldown", isPresented: $showCooldownAlert) {
-                Button("OK", role: .cancel) {}
+            .alert(String(localized: "Label cooldown"), isPresented: $showCooldownAlert) {
+                Button(String(localized: "OK"), role: .cancel) {}
             } message: {
-                Text("Please wait \(Int(ceil(mesh.mapLabelCooldownRemaining))) seconds before placing another label.")
+                Text(String(format: String(localized: "Please wait %lld seconds before placing another label."), Int64(ceil(mesh.mapLabelCooldownRemaining))))
             }
-            .alert("Too far", isPresented: $showTooFarAlert) {
-                Button("OK", role: .cancel) {}
+            .alert(String(localized: "Too far"), isPresented: $showTooFarAlert) {
+                Button(String(localized: "OK"), role: .cancel) {}
             } message: {
-                Text("Place event labels within 5 km of your current location. Turn on Share location and move closer.")
+                Text(String(localized: "Place event labels within 5 km of your current location. Turn on Share location and move closer."))
             }
             .sheet(isPresented: $showOfflineInfo) {
                 OfflineMapSheet(isCaching: $isCaching, region: region, onCache: cacheCurrentRegion)
@@ -407,10 +407,10 @@ struct MapTabView: View {
 
     private func relativeTime(_ date: Date) -> String {
         let s = Date().timeIntervalSince(date)
-        if s < 60 { return "now" }
-        if s < 3600 { return "\(Int(s / 60))m ago" }
-        if s < 86400 { return "\(Int(s / 3600))h ago" }
-        return "\(Int(s / 86400))d ago"
+        if s < 60 { return String(localized: "now") }
+        if s < 3600 { return String(format: String(localized: "%lldm ago"), Int64(s / 60)) }
+        if s < 86400 { return String(format: String(localized: "%lldh ago"), Int64(s / 3600)) }
+        return String(format: String(localized: "%lldd ago"), Int64(s / 86400))
     }
 }
 
@@ -469,7 +469,7 @@ private struct CompassView: View {
                 .frame(width: 56, height: 56)
         }
         .overlay(alignment: .top) {
-            Text("N")
+            Text(String(localized: "N"))
                 .font(.system(size: 10, weight: .bold))
                 .offset(y: -28)
         }
@@ -700,7 +700,7 @@ private struct LabelVoteSheet: View {
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                     }
-                    Text("By \(record.senderName)")
+                    Text(String(format: String(localized: "By %@"), record.senderName))
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                     Text(record.date.formatted(date: .abbreviated, time: .shortened))
@@ -787,16 +787,16 @@ private struct ClusterListSheet: View {
 
     private func relativeTime(_ date: Date) -> String {
         let s = Date().timeIntervalSince(date)
-        if s < 60 { return "now" }
-        if s < 3600 { return "\(Int(s / 60))m ago" }
-        if s < 86400 { return "\(Int(s / 3600))h ago" }
-        return "\(Int(s / 86400))d ago"
+        if s < 60 { return String(localized: "now") }
+        if s < 3600 { return String(format: String(localized: "%lldm ago"), Int64(s / 60)) }
+        if s < 86400 { return String(format: String(localized: "%lldh ago"), Int64(s / 3600)) }
+        return String(format: String(localized: "%lldd ago"), Int64(s / 86400))
     }
 
     var body: some View {
         NavigationStack {
             List {
-                Section("Events near this location") {
+                Section(String(localized: "Events near this location")) {
                     ForEach(sortedRecords, id: \.id) { record in
                         Button {
                             onSelectRecord(record)

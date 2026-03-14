@@ -8,9 +8,9 @@ public struct EventTypesConfig: Codable {
     public var other: EventTypeConfig
     
     public static let `default` = EventTypesConfig(
-        hazard: EventTypeConfig(name: "Hazard", description: "Danger or risk indicators"),
-        help: EventTypeConfig(name: "Help", description: "Assistance or support requests"),
-        other: EventTypeConfig(name: "Other", description: "Miscellaneous event categories")
+        hazard: EventTypeConfig(name: String(localized: "Hazard"), description: String(localized: "Danger or risk indicators")),
+        help: EventTypeConfig(name: String(localized: "Help"), description: String(localized: "Assistance or support requests")),
+        other: EventTypeConfig(name: String(localized: "Other"), description: String(localized: "Miscellaneous event categories"))
     )
     
     public init(hazard: EventTypeConfig, help: EventTypeConfig, other: EventTypeConfig) {

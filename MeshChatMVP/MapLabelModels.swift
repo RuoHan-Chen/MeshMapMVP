@@ -18,16 +18,16 @@ public enum LabelCategory: String, Codable, CaseIterable {
     /// Default display name; can be overridden by customLabelName on the record.
     public var displayName: String {
         switch self {
-        case .hazard: return "Hazard"
-        case .help: return "Help"
-        case .other: return "Other"
-        case .armedConflict: return "Armed conflict / gunfire"
-        case .explosion: return "Explosion / bombing"
-        case .drone: return "Drone / airstrike"
-        case .militaryMovement: return "Military movement"
-        case .policeCrackdown: return "Police crackdown"
-        case .arrests: return "Arrests / detention"
-        case .checkpoint: return "Checkpoint / roadblock"
+        case .hazard: return String(localized: "Hazard")
+        case .help: return String(localized: "Help")
+        case .other: return String(localized: "Other")
+        case .armedConflict: return String(localized: "Armed conflict / gunfire")
+        case .explosion: return String(localized: "Explosion / bombing")
+        case .drone: return String(localized: "Drone / airstrike")
+        case .militaryMovement: return String(localized: "Military movement")
+        case .policeCrackdown: return String(localized: "Police crackdown")
+        case .arrests: return String(localized: "Arrests / detention")
+        case .checkpoint: return String(localized: "Checkpoint / roadblock")
         }
     }
 

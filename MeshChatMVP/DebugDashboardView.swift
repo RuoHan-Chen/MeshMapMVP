@@ -142,7 +142,7 @@ struct DebugDashboardView: View {
                             .background(Capsule().fill(Color.secondary.opacity(0.2)))
                     }
                 }
-                Text("RSSI \(p.rssi) · \(p.linkState)" + (centralState.map { " · \($0)" } ?? ""))
+                Text(String(format: String(localized: "RSSI %lld · %@"), Int64(p.rssi), p.linkState + (centralState.map { " · \($0)" } ?? "")))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 HStack {
@@ -167,11 +167,11 @@ struct DebugDashboardView: View {
 
     private func stateLabel(_ s: CBManagerState) -> String {
         switch s {
-        case .poweredOn: return "On"
-        case .poweredOff: return "Off"
-        case .unauthorized: return "Denied"
-        case .unsupported: return "Unsupported"
-        case .resetting: return "Resetting"
+        case .poweredOn: return String(localized: "On")
+        case .poweredOff: return String(localized: "Off")
+        case .unauthorized: return String(localized: "Denied")
+        case .unsupported: return String(localized: "Unsupported")
+        case .resetting: return String(localized: "Resetting")
         default: return "…"
         }
     }

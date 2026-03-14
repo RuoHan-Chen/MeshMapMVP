@@ -18,6 +18,7 @@
 		A1000008 /* AnnouncementPayload.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000008 /* AnnouncementPayload.swift */; };
 		A1000009 /* ChatMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000009 /* ChatMessage.swift */; };
 		A100000A /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A200000A /* Assets.xcassets */; };
+		A1000031 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = A2000031 /* Localizable.xcstrings */; };
 		A100000B /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200000C /* ChatView.swift */; };
 		A100000C /* DebugDashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200000D /* DebugDashboardView.swift */; };
 		A100000E /* MapTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200000E /* MapTabView.swift */; };
@@ -74,6 +75,7 @@
 		A200002A /* ContactEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactEditorView.swift; sourceTree = "<group>"; };
 		A200002B /* ContactsListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactsListView.swift; sourceTree = "<group>"; };
 		A200002C /* PrivateChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrivateChatView.swift; sourceTree = "<group>"; };
+		A2000031 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -130,6 +132,7 @@
 				A200002B /* ContactsListView.swift */,
 				A200002C /* PrivateChatView.swift */,
 				A200000A /* Assets.xcassets */,
+				A2000031 /* Localizable.xcstrings */,
 			);
 			path = MeshChatMVP;
 			sourceTree = "<group>";
@@ -182,8 +185,105 @@
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
-				en,
 				Base,
+				en,
+				af,
+				am,
+				ar,
+				"ar-SA",
+				az,
+				be,
+				bg,
+				bn,
+				bs,
+				ca,
+				cs,
+				cy,
+				da,
+				de,
+				"de-AT",
+				"de-CH",
+				el,
+				"en-AU",
+				"en-CA",
+				"en-GB",
+				"en-IN",
+				"en-NZ",
+				"en-SG",
+				"en-ZA",
+				es,
+				"es-419",
+				"es-MX",
+				"es-US",
+				et,
+				eu,
+				fa,
+				fi,
+				fil,
+				fr,
+				"fr-BE",
+				"fr-CA",
+				"fr-CH",
+				ga,
+				gd,
+				gl,
+				gu,
+				he,
+				hi,
+				"hi-Latn",
+				hr,
+				hu,
+				hy,
+				id,
+				is,
+				it,
+				"it-CH",
+				ja,
+				ka,
+				kk,
+				km,
+				kn,
+				ko,
+				lo,
+				lt,
+				lv,
+				mk,
+				ml,
+				mn,
+				mr,
+				ms,
+				my,
+				nb,
+				ne,
+				nl,
+				"nl-BE",
+				or,
+				pa,
+				pl,
+				"pt-BR",
+				"pt-PT",
+				ro,
+				ru,
+				si,
+				sk,
+				sl,
+				sq,
+				sr,
+				"sr-Latn",
+				sv,
+				sw,
+				ta,
+				te,
+				th,
+				tr,
+				uk,
+				ur,
+				uz,
+				vi,
+				"zh-Hans",
+				"zh-Hant",
+				"zh-HK",
+				zu,
 			);
 			mainGroup = A4000000;
 			packageReferences = (
@@ -204,6 +304,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				A100000A /* Assets.xcassets in Resources */,
+				A1000031 /* Localizable.xcstrings in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

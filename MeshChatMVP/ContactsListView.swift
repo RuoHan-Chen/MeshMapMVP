@@ -122,7 +122,7 @@ struct ContactsListView: View {
             contacts = try DatabaseManager.shared.listContacts()
         } catch {
             contacts = []
-            loadError = "Couldn’t load contacts."
+            loadError = String(localized: "Couldn’t load contacts.")
         }
     }
 }

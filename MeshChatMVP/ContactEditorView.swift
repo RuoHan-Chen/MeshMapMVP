@@ -32,7 +32,7 @@ struct ContactEditorView: View {
                 Section("Public key") {
                     Text(fingerprint)
                         .font(.system(.body, design: .monospaced))
-                    Text("\(publicKey.count) bytes · cannot change")
+                    Text(String(format: String(localized: "%lld bytes · cannot change"), Int64(publicKey.count)))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
