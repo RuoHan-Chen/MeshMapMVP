@@ -1,6 +1,8 @@
 import Foundation
 import CoreBluetooth
 import CoreLocation
+import UserNotifications
+import UIKit
 
 // MARK: - GATT UUIDs (single service + single characteristic)
 private let kMeshServiceUUID = CBUUID(string: "6E400001-B5A3-F393-E0A9-E50E24DCCA9E")
@@ -74,6 +76,15 @@ final class BluetoothMeshService: NSObject, ObservableObject {
     private var dedupQueue: [UUID] = []
     private let maxDedupEntries = 500
     private var pruneTimer: Timer?
+    /// Single upsert map for discovered peers (avoids duplicate rows from concurrent main-queue updates).
+    private var discoveredPeerById: [UUID: DiscoveredPeer] = [:]
+    /// Chat history TTL (persisted messages older than this are dropped).
+    private let chatHistoryTTLSeconds: TimeInterval = 20 * 60
+    private var chatHistoryURL: URL {
+        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("MeshChatMVP", isDirectory: true)
+            .appendingPathComponent("chat_history.json")
+    }
 
     private var scanIdleWorkItem: DispatchWorkItem?
     private var scanCountdownTimer: Timer?
@@ -83,6 +94,17 @@ final class BluetoothMeshService: NSObject, ObservableObject {
     private var bleScanIdle: Double = 40
 
     private let defaultTTL: UInt8 = 5
+    /// Raw bytes per image chunk so full JSON envelope stays ≤512 B over BLE.
+    private static let imageChunkRawBytes = 40
+    /// Reassembly buffers (main thread).
+    private var pendingImages: [UUID: PendingImageChunkBuffer] = [:]
+
+    private struct PendingImageChunkBuffer {
+        var total: UInt16
+        var parts: [UInt16: Data]
+        var senderID: String
+        var senderName: String
+    }
 
     override init() {
         identity = DeviceIdentity.load()
@@ -95,6 +117,9 @@ final class BluetoothMeshService: NSObject, ObservableObject {
         locationManager.desiredAccuracy = kCLLocationAccuracyHundredMeters
         locationManager.requestWhenInUseAuthorization()
         startPruneTimer()
+        loadChatHistory()
+        requestNotificationAuthIfNeeded()
+        startChatHistoryPruneTimer()
     }
 
     deinit {
@@ -219,8 +244,63 @@ final class BluetoothMeshService: NSObject, ObservableObject {
             env.senderLatitude = loc.lat
             env.senderLongitude = loc.lon
         }
-        appendLocalChat(envelope: env, text: trimmed)
-        broadcastEnvelope(env, excludeCentral: nil, excludePeripheral: nil)
+        let envCopy = env
+        let textCopy = trimmed
+        bleQueue.async { [weak self] in
+            guard let self else { return }
+            // Mark seen before broadcast so our own packet echo/relay back is deduped (fixes double bubble).
+            _ = self.markSeen(envCopy.id)
+            self.broadcastEnvelope(envCopy, excludeCentral: nil, excludePeripheral: nil)
+        }
+        appendLocalChat(envelope: envCopy, text: textCopy, imageJPEGBase64: nil)
+    }
+
+    /// Compress, chunk, flood JPEG (no encryption). Best-effort over BLE size limit.
+    func sendImage(jpegData: Data) {
+        guard !jpegData.isEmpty, jpegData.count <= MeshImageUtils.maxJPEGBytes else {
+            log("Image send: empty or too large")
+            return
+        }
+        let transferId = UUID()
+        let chunkSize = Self.imageChunkRawBytes
+        let total = UInt16((jpegData.count + chunkSize - 1) / chunkSize)
+        var envelopes: [MeshEnvelope] = []
+        for i in 0..<Int(total) {
+            let start = i * chunkSize
+            let end = min(start + chunkSize, jpegData.count)
+            let slice = jpegData.subdata(in: start..<end)
+            let chunk = ImageChunkPayload(transferId: transferId, chunkIndex: UInt16(i), totalChunks: total, data: slice)
+            guard let payloadData = try? JSONEncoder().encode(chunk) else { continue }
+            var env = MeshEnvelope(
+                id: UUID(),
+                type: .imageChunk,
+                senderID: identity.deviceID,
+                senderName: identity.nickname,
+                timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+                ttl: defaultTTL,
+                payload: payloadData,
+                senderLatitude: nil,
+                senderLongitude: nil
+            )
+            if identity.shareLocation, let loc = lastKnownLocation {
+                env.senderLatitude = loc.lat
+                env.senderLongitude = loc.lon
+            }
+            envelopes.append(env)
+        }
+        guard !envelopes.isEmpty else { return }
+        let firstEnv = envelopes[0]
+        let imageB64 = jpegData.base64EncodedString()
+        bleQueue.async { [weak self] in
+            guard let self else { return }
+            for env in envelopes {
+                _ = self.markSeen(env.id)
+                self.broadcastEnvelope(env, excludeCentral: nil, excludePeripheral: nil)
+                // Tiny gap reduces notify backpressure on slow links
+                Thread.sleep(forTimeInterval: 0.02)
+            }
+        }
+        appendLocalChat(envelope: firstEnv, text: "[photo]", imageJPEGBase64: imageB64)
     }
 
     func clearDebugLog() {
@@ -378,8 +458,12 @@ final class BluetoothMeshService: NSObject, ObservableObject {
         excludeCentral: CBCentral?,
         excludePeripheral: CBPeripheral?
     ) {
-        guard let data = MeshEnvelope.encodeJSON(envelope), data.count <= 512 else {
-            log("Envelope too large or encode failed")
+        guard let data = MeshEnvelope.encodeJSON(envelope) else {
+            log("Envelope encode failed")
+            return
+        }
+        if data.count > 512 {
+            log("Envelope too large (\(data.count) B) — drop")
             return
         }
         if let char = meshCharacteristic, !subscribedCentrals.isEmpty {
@@ -419,21 +503,35 @@ final class BluetoothMeshService: NSObject, ObservableObject {
         case .message:
             if let chat = try? JSONDecoder().decode(ChatPayload.self, from: env.payload) {
                 let envCopy = env
-                DispatchQueue.main.async { [weak self] in
-                    guard let self else { return }
-                    let distance = self.distanceFromMe(senderID: envCopy.senderID)
-                    self.chatMessages.append(
-                        ChatMessage(
-                            id: UUID(),
-                            envelopeId: envCopy.id,
-                            senderID: envCopy.senderID,
-                            senderName: envCopy.senderName,
-                            text: chat.text,
-                            date: Date(),
-                            isLocal: envCopy.senderID == self.identity.deviceID,
-                            distanceFromMe: distance
+                let skipAppend = envCopy.senderID == identity.deviceID
+                if !skipAppend {
+                    DispatchQueue.main.async { [weak self] in
+                        guard let self else { return }
+                        let distance = self.distanceFromMe(senderID: envCopy.senderID)
+                        self.appendChatMessage(
+                            ChatMessage(
+                                id: UUID(),
+                                envelopeId: envCopy.id,
+                                senderID: envCopy.senderID,
+                                senderName: envCopy.senderName,
+                                text: chat.text,
+                                date: Date(),
+                                isLocal: false,
+                                distanceFromMe: distance,
+                                imageJPEGBase64: nil
+                            )
                         )
-                    )
+                        self.notifyIncomingIfNeeded(sender: envCopy.senderName, text: chat.text)
+                    }
+                }
+            }
+        case .imageChunk:
+            if let chunk = try? JSONDecoder().decode(ImageChunkPayload.self, from: env.payload) {
+                let fromSelf = env.senderID == identity.deviceID
+                if !fromSelf {
+                    DispatchQueue.main.async { [weak self] in
+                        self?.mergeImageChunk(env: env, chunk: chunk)
+                    }
                 }
             }
         }
@@ -452,9 +550,9 @@ final class BluetoothMeshService: NSObject, ObservableObject {
         }
     }
 
-    private func appendLocalChat(envelope: MeshEnvelope, text: String) {
+    private func appendLocalChat(envelope: MeshEnvelope, text: String, imageJPEGBase64: String?) {
         DispatchQueue.main.async { [weak self] in
-            self?.chatMessages.append(
+            self?.appendChatMessage(
                 ChatMessage(
                     id: UUID(),
                     envelopeId: envelope.id,
@@ -463,10 +561,137 @@ final class BluetoothMeshService: NSObject, ObservableObject {
                     text: text,
                     date: Date(),
                     isLocal: true,
-                    distanceFromMe: nil
+                    distanceFromMe: nil,
+                    imageJPEGBase64: imageJPEGBase64
                 )
             )
         }
+    }
+
+    private func mergeImageChunk(env: MeshEnvelope, chunk: ImageChunkPayload) {
+        var buf = pendingImages[chunk.transferId] ?? PendingImageChunkBuffer(
+            total: chunk.totalChunks,
+            parts: [:],
+            senderID: env.senderID,
+            senderName: env.senderName
+        )
+        if buf.total != chunk.totalChunks { buf.total = chunk.totalChunks }
+        buf.parts[chunk.chunkIndex] = chunk.data
+        pendingImages[chunk.transferId] = buf
+        guard buf.parts.count == Int(buf.total) else { return }
+        var full = Data()
+        for i in 0..<Int(buf.total) {
+            guard let p = buf.parts[UInt16(i)] else { return }
+            full.append(p)
+        }
+        pendingImages.removeValue(forKey: chunk.transferId)
+        guard full.count > 100 else { return } // min sane JPEG
+        let distance = distanceFromMe(senderID: env.senderID)
+        let b64 = full.base64EncodedString()
+        appendChatMessage(
+            ChatMessage(
+                id: UUID(),
+                envelopeId: env.id,
+                senderID: env.senderID,
+                senderName: env.senderName,
+                text: "[photo]",
+                date: Date(),
+                isLocal: false,
+                distanceFromMe: distance,
+                imageJPEGBase64: b64
+            )
+        )
+        notifyIncomingIfNeeded(sender: env.senderName, text: "[Photo]")
+    }
+
+    private func appendChatMessage(_ m: ChatMessage) {
+        chatMessages.append(m)
+        pruneChatByTTL()
+        saveChatHistory()
+    }
+
+    private func pruneChatByTTL() {
+        let cutoff = Date().addingTimeInterval(-chatHistoryTTLSeconds)
+        chatMessages.removeAll { $0.date < cutoff }
+    }
+
+    private func loadChatHistory() {
+        let dir = chatHistoryURL.deletingLastPathComponent()
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        guard let data = try? Data(contentsOf: chatHistoryURL),
+              let decoded = try? JSONDecoder().decode([ChatMessage].self, from: data)
+        else { return }
+        let cutoff = Date().addingTimeInterval(-chatHistoryTTLSeconds)
+        let fresh = decoded.filter { $0.date >= cutoff }.map { m -> ChatMessage in
+            guard m.imageJPEGBase64 != nil else { return m }
+            let label = m.text.isEmpty ? "[photo]" : m.text
+            return ChatMessage(
+                id: m.id, envelopeId: m.envelopeId, senderID: m.senderID, senderName: m.senderName,
+                text: label, date: m.date, isLocal: m.isLocal, distanceFromMe: m.distanceFromMe,
+                imageJPEGBase64: nil
+            )
+        }
+        DispatchQueue.main.async { [weak self] in
+            self?.chatMessages = fresh
+        }
+    }
+
+    private func saveChatHistory() {
+        pruneChatByTTL()
+        let dir = chatHistoryURL.deletingLastPathComponent()
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        // Never persist image bytes — only placeholders (text) go to disk.
+        let forDisk: [ChatMessage] = chatMessages.map { m in
+            let label: String
+            if m.imageJPEGBase64 != nil {
+                if m.text == "Photo" || m.text == "[photo]" || m.text.hasPrefix("Photo") {
+                    label = "[photo]"
+                } else {
+                    label = m.text.isEmpty ? "[photo]" : m.text
+                }
+            } else {
+                label = m.text
+            }
+            return ChatMessage(
+                id: m.id,
+                envelopeId: m.envelopeId,
+                senderID: m.senderID,
+                senderName: m.senderName,
+                text: label,
+                date: m.date,
+                isLocal: m.isLocal,
+                distanceFromMe: m.distanceFromMe,
+                imageJPEGBase64: nil
+            )
+        }
+        if let data = try? JSONEncoder().encode(forDisk) {
+            try? data.write(to: chatHistoryURL, options: .atomic)
+        }
+    }
+
+    private func startChatHistoryPruneTimer() {
+        DispatchQueue.main.async { [weak self] in
+            Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
+                guard let self else { return }
+                self.pruneChatByTTL()
+                self.saveChatHistory()
+            }
+        }
+    }
+
+    private func requestNotificationAuthIfNeeded() {
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { _, _ in }
+    }
+
+    private func notifyIncomingIfNeeded(sender: String, text: String) {
+        let state = UIApplication.shared.applicationState
+        guard state != .active else { return }
+        let content = UNMutableNotificationContent()
+        content.title = sender
+        content.body = text
+        content.sound = .default
+        let req = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
+        UNUserNotificationCenter.current().add(req)
     }
 
     /// Haversine distance in meters between two WGS84 coordinates.
@@ -566,13 +791,12 @@ final class BluetoothMeshService: NSObject, ObservableObject {
     private func publishDiscoveredPeer(id: UUID, name: String, rssi: Int, linkState: String) {
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
-            if let idx = self.discoveredPeers.firstIndex(where: { $0.id == id }) {
-                self.discoveredPeers[idx].name = name
-                self.discoveredPeers[idx].rssi = rssi
-                self.discoveredPeers[idx].linkState = linkState
-            } else {
-                self.discoveredPeers.append(DiscoveredPeer(id: id, name: name, rssi: rssi, nickname: nil, linkState: linkState))
-            }
+            var p = self.discoveredPeerById[id] ?? DiscoveredPeer(id: id, name: name, rssi: rssi, nickname: nil, linkState: linkState)
+            p.name = name
+            p.rssi = rssi
+            p.linkState = linkState
+            self.discoveredPeerById[id] = p
+            self.discoveredPeers = self.discoveredPeerById.values.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
         }
     }
 }

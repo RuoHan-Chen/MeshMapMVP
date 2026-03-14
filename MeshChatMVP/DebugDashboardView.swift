@@ -60,7 +60,7 @@ struct DebugDashboardView: View {
                         .foregroundStyle(.secondary)
                 }
 
-                Section("Peers (discovery + auto-connect)") {
+                Section("Peers (one row per device — discovery + link)") {
                     if mesh.discoveredPeers.isEmpty {
                         Text("No peers in this scan window — both apps must be open; wait for next scan or tap Scan now.")
                             .font(.caption)
@@ -69,7 +69,8 @@ struct DebugDashboardView: View {
                         ForEach(mesh.discoveredPeers) { p in
                             VStack(alignment: .leading, spacing: 4) {
                                 Text(p.name).font(.headline)
-                                Text("RSSI \(p.rssi) · \(p.linkState)")
+                                let centralState = mesh.debugConnectionRows.first(where: { $0.id == p.id })?.state
+                                Text("RSSI \(p.rssi) · \(p.linkState)" + (centralState.map { " · GATT: \($0)" } ?? ""))
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                                 Text(p.id.uuidString)
@@ -79,20 +80,6 @@ struct DebugDashboardView: View {
                             }
                             .padding(.vertical, 4)
                         }
-                    }
-                }
-
-                Section("Connected (you are central)") {
-                    ForEach(mesh.debugConnectionRows) { row in
-                        VStack(alignment: .leading) {
-                            Text(row.name)
-                            Text(row.state).font(.caption).foregroundStyle(.secondary)
-                        }
-                    }
-                    if mesh.debugConnectionRows.isEmpty {
-                        Text("None — auto-connect runs during scan; check log for Fail connect.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
                     }
                 }
 

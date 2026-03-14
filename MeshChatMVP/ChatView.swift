@@ -1,10 +1,15 @@
 import SwiftUI
+import PhotosUI
 
-/// Chat-only UI (mesh status strip + transcript + send).
+/// Chat-only UI (mesh status strip + transcript + send + simple photo send).
 struct ChatView: View {
     @EnvironmentObject var mesh: BluetoothMeshService
     @State private var draft = ""
     @FocusState private var messageFocused: Bool
+    @State private var sendCooldown = false
+    @State private var showPhotoPicker = false
+    @State private var pickedItem: PhotosPickerItem?
+    @State private var imageBusy = false
 
     var body: some View {
         NavigationStack {
@@ -31,19 +36,31 @@ struct ChatView: View {
                 }
                 Divider()
                 HStack(alignment: .bottom, spacing: 10) {
+                    PhotosPicker(selection: $pickedItem, matching: .images, photoLibrary: .shared()) {
+                        Image(systemName: "photo.on.rectangle.angled")
+                            .font(.title2)
+                            .foregroundColor(imageBusy ? .secondary : .accentColor)
+                    }
+                    .disabled(imageBusy || sendCooldown)
                     TextField("Message", text: $draft, axis: .vertical)
                         .textFieldStyle(.roundedBorder)
                         .lineLimit(1...4)
                         .focused($messageFocused)
                     Button {
-                        mesh.sendChat(text: draft)
+                        let t = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+                        guard !t.isEmpty, !sendCooldown else { return }
+                        sendCooldown = true
+                        mesh.sendChat(text: t)
                         draft = ""
                         messageFocused = false
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                            sendCooldown = false
+                        }
                     } label: {
                         Image(systemName: "arrow.up.circle.fill")
                             .font(.title2)
                     }
-                    .disabled(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .disabled(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || sendCooldown)
                 }
                 .padding()
             }
@@ -62,6 +79,30 @@ struct ChatView: View {
                     }
                     .opacity(messageFocused ? 1 : 0)
                     .disabled(!messageFocused)
+                }
+            }
+            .onChange(of: pickedItem) { newItem in
+                guard let newItem else { return }
+                imageBusy = true
+                Task {
+                    defer {
+                        Task { @MainActor in
+                            imageBusy = false
+                            pickedItem = nil
+                        }
+                    }
+                    guard let data = try? await newItem.loadTransferable(type: Data.self),
+                          let ui = UIImage(data: data),
+                          let jpeg = try? MeshImageUtils.jpegDataForMesh(from: ui)
+                    else { return }
+                    await MainActor.run {
+                        sendCooldown = true
+                        mesh.sendImage(jpegData: jpeg)
+                        messageFocused = false
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                            sendCooldown = false
+                        }
+                    }
                 }
             }
         }
@@ -92,7 +133,7 @@ struct ChatView: View {
                         .foregroundStyle(.secondary)
                 }
             }
-            Text("Switch tab bar → Dashboard to leave chat. Tap transcript or Done to hide keyboard.")
+            Text("Photos: small JPEG chunks over BLE (~12KB max). Switch tab → Dashboard to leave chat.")
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
         }
@@ -113,13 +154,23 @@ struct ChatView: View {
                 if !m.isLocal, let dist = m.distanceFromMe {
                     Text(distanceString(dist)).font(.caption2).foregroundStyle(.secondary)
                 }
-                Text(m.text)
-                    .font(.body)
-                    .padding(12)
-                    .background(
-                        RoundedRectangle(cornerRadius: 16)
-                            .fill(m.isLocal ? Color.accentColor.opacity(0.2) : Color(.secondarySystemBackground))
-                    )
+                Group {
+                    if let b64 = m.imageJPEGBase64, let imgData = Data(base64Encoded: b64), let ui = UIImage(data: imgData) {
+                        Image(uiImage: ui)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(maxWidth: 220, maxHeight: 220)
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                    } else {
+                        Text(m.text)
+                            .font(.body)
+                    }
+                }
+                .padding(12)
+                .background(
+                    RoundedRectangle(cornerRadius: 16)
+                        .fill(m.isLocal ? Color.accentColor.opacity(0.2) : Color(.secondarySystemBackground))
+                )
             }
             if !m.isLocal { Spacer(minLength: 48) }
         }
