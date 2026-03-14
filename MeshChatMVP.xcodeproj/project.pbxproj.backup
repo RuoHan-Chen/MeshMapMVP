@@ -21,7 +21,17 @@
 		A100000C /* DebugDashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200000D /* DebugDashboardView.swift */; };
 		A100000E /* MapTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200000E /* MapTabView.swift */; };
 		A100000F /* MapLabelModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200000F /* MapLabelModels.swift */; };
-		A1000010 /* EventTypesConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000010 /* EventTypesConfig.swift */; };
+		A1000010 /* ImageChunkPayload.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000010 /* ImageChunkPayload.swift */; };
+		A1000011 /* MeshImageUtils.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000011 /* MeshImageUtils.swift */; };
+		A1000015 /* Contact.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000020 /* Contact.swift */; };
+		A1000016 /* PersistedMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000021 /* PersistedMessage.swift */; };
+		A1000017 /* Alert.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000022 /* Alert.swift */; };
+		A1000018 /* Vouch.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000023 /* Vouch.swift */; };
+		A1000019 /* NodeSighting.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000024 /* NodeSighting.swift */; };
+		A100001A /* AlertPayload.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000025 /* AlertPayload.swift */; };
+		A100001B /* VouchPayload.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000026 /* VouchPayload.swift */; };
+		A100001C /* DatabaseManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000027 /* DatabaseManager.swift */; };
+		D974FBAF2F651AD7008F4874 /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = D974FBAE2F651AD7008F4874 /* GRDB */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -40,7 +50,16 @@
 		A200000D /* DebugDashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DebugDashboardView.swift; sourceTree = "<group>"; };
 		A200000E /* MapTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapTabView.swift; sourceTree = "<group>"; };
 		A200000F /* MapLabelModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapLabelModels.swift; sourceTree = "<group>"; };
-		A2000010 /* EventTypesConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventTypesConfig.swift; sourceTree = "<group>"; };
+		A2000010 /* ImageChunkPayload.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageChunkPayload.swift; sourceTree = "<group>"; };
+		A2000011 /* MeshImageUtils.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeshImageUtils.swift; sourceTree = "<group>"; };
+		A2000020 /* Contact.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Contact.swift; sourceTree = "<group>"; };
+		A2000021 /* PersistedMessage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersistedMessage.swift; sourceTree = "<group>"; };
+		A2000022 /* Alert.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Alert.swift; sourceTree = "<group>"; };
+		A2000023 /* Vouch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Vouch.swift; sourceTree = "<group>"; };
+		A2000024 /* NodeSighting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NodeSighting.swift; sourceTree = "<group>"; };
+		A2000025 /* AlertPayload.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlertPayload.swift; sourceTree = "<group>"; };
+		A2000026 /* VouchPayload.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VouchPayload.swift; sourceTree = "<group>"; };
+		A2000027 /* DatabaseManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DatabaseManager.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -48,6 +67,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				D974FBAF2F651AD7008F4874 /* GRDB in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -78,7 +98,16 @@
 				A2000008 /* AnnouncementPayload.swift */,
 				A2000009 /* ChatMessage.swift */,
 				A200000F /* MapLabelModels.swift */,
-				A2000010 /* EventTypesConfig.swift */,
+				A2000010 /* ImageChunkPayload.swift */,
+				A2000011 /* MeshImageUtils.swift */,
+				A2000020 /* Contact.swift */,
+				A2000021 /* PersistedMessage.swift */,
+				A2000022 /* Alert.swift */,
+				A2000023 /* Vouch.swift */,
+				A2000024 /* NodeSighting.swift */,
+				A2000025 /* AlertPayload.swift */,
+				A2000026 /* VouchPayload.swift */,
+				A2000027 /* DatabaseManager.swift */,
 				A200000A /* Assets.xcassets */,
 			);
 			path = MeshChatMVP;
@@ -136,6 +165,9 @@
 				Base,
 			);
 			mainGroup = A4000000;
+			packageReferences = (
+				D974FBAD2F651AD7008F4874 /* XCRemoteSwiftPackageReference "GRDB" */,
+			);
 			productRefGroup = A4000002 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -174,7 +206,16 @@
 				A1000007 /* ChatPayload.swift in Sources */,
 				A1000008 /* AnnouncementPayload.swift in Sources */,
 				A1000009 /* ChatMessage.swift in Sources */,
-				A1000010 /* EventTypesConfig.swift in Sources */,
+				A1000010 /* ImageChunkPayload.swift in Sources */,
+				A1000011 /* MeshImageUtils.swift in Sources */,
+				A1000015 /* Contact.swift in Sources */,
+				A1000016 /* PersistedMessage.swift in Sources */,
+				A1000017 /* Alert.swift in Sources */,
+				A1000018 /* Vouch.swift in Sources */,
+				A1000019 /* NodeSighting.swift in Sources */,
+				A100001A /* AlertPayload.swift in Sources */,
+				A100001B /* VouchPayload.swift in Sources */,
+				A100001C /* DatabaseManager.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -243,7 +284,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.jeremiahwebb.MeshChatMVP;
+				PRODUCT_BUNDLE_IDENTIFIER = com.jeremiah.MeshChatMVP;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
@@ -270,7 +311,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.jeremiahwebb.MeshChatMVP;
+				PRODUCT_BUNDLE_IDENTIFIER = com.jeremiah.MeshChatMVP;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
@@ -300,6 +341,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		D974FBAD2F651AD7008F4874 /* XCRemoteSwiftPackageReference "GRDB" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/groue/GRDB.swift";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 6.0.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		D974FBAE2F651AD7008F4874 /* GRDB */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = D974FBAD2F651AD7008F4874 /* XCRemoteSwiftPackageReference "GRDB" */;
+			productName = GRDB;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = A6000001 /* Project object */;
 }

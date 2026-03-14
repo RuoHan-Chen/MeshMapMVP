@@ -2,7 +2,11 @@ import Foundation
 import CoreLocation
 
 /// Category for user-placed map labels (shared over mesh).
+/// First three are the configurable event types (Hazard, Help, Other); rest are legacy.
 public enum LabelCategory: String, Codable, CaseIterable {
+    case hazard = "hazard"
+    case help = "help"
+    case other = "other"
     case armedConflict = "armed_conflict"
     case explosion = "explosion"
     case drone = "drone"
@@ -11,8 +15,12 @@ public enum LabelCategory: String, Codable, CaseIterable {
     case arrests = "arrests"
     case checkpoint = "checkpoint"
 
+    /// Default display name; can be overridden by customLabelName on the record.
     public var displayName: String {
         switch self {
+        case .hazard: return "Hazard"
+        case .help: return "Help"
+        case .other: return "Other"
         case .armedConflict: return "Armed conflict / gunfire"
         case .explosion: return "Explosion / bombing"
         case .drone: return "Drone / airstrike"
@@ -25,6 +33,9 @@ public enum LabelCategory: String, Codable, CaseIterable {
 
     public var systemImage: String {
         switch self {
+        case .hazard: return "exclamationmark.triangle.fill"
+        case .help: return "hand.raised.fill"
+        case .other: return "questionmark.circle.fill"
         case .armedConflict: return "bolt.fill"
         case .explosion: return "flame.fill"
         case .drone: return "airplane"
@@ -34,6 +45,9 @@ public enum LabelCategory: String, Codable, CaseIterable {
         case .checkpoint: return "road.lanes"
         }
     }
+
+    /// Only hazard, help, other use EventTypesConfig for custom names.
+    public static var configurableEventTypes: [LabelCategory] { [.hazard, .help, .other] }
 }
 
 /// Wire payload for a map label (place on map, share with peers).
@@ -46,12 +60,29 @@ public struct MapLabelPayload: Codable, Equatable {
     public let senderID: String
     public let senderName: String
     public let timestamp: UInt64
+    /// Optional custom label name (for hazard/help/other).
+    public let customLabelName: String?
+    /// Optional description (for hazard/help/other).
+    public let customDescription: String?
+    /// Optional explicit SF Symbol chosen when creating the event.
+    public let customSystemImage: String?
 
     private enum CodingKeys: String, CodingKey {
-        case id = "i", category = "c", lat = "a", lon = "o", timestamp = "t"
+        case id = "i", category = "c", lat = "a", lon = "o", timestamp = "t", customLabelName = "n", customDescription = "d", customSystemImage = "s"
     }
 
-    public init(id: UUID, category: String, lat: Double, lon: Double, senderID: String, senderName: String, timestamp: UInt64) {
+    public init(
+        id: UUID,
+        category: String,
+        lat: Double,
+        lon: Double,
+        senderID: String,
+        senderName: String,
+        timestamp: UInt64,
+        customLabelName: String? = nil,
+        customDescription: String? = nil,
+        customSystemImage: String? = nil
+    ) {
         self.id = id
         self.category = category
         self.lat = lat
@@ -59,6 +90,9 @@ public struct MapLabelPayload: Codable, Equatable {
         self.senderID = senderID
         self.senderName = senderName
         self.timestamp = timestamp
+        self.customLabelName = customLabelName
+        self.customDescription = customDescription
+        self.customSystemImage = customSystemImage
     }
 
     /// Decode from wire (short keys); caller must set senderID/senderName from envelope when storing.
@@ -71,6 +105,9 @@ public struct MapLabelPayload: Codable, Equatable {
         timestamp = try c.decode(UInt64.self, forKey: .timestamp)
         senderID = ""
         senderName = ""
+        customLabelName = try c.decodeIfPresent(String.self, forKey: .customLabelName)
+        customDescription = try c.decodeIfPresent(String.self, forKey: .customDescription)
+        customSystemImage = try c.decodeIfPresent(String.self, forKey: .customSystemImage)
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -80,7 +117,9 @@ public struct MapLabelPayload: Codable, Equatable {
         try c.encode(lat, forKey: .lat)
         try c.encode(lon, forKey: .lon)
         try c.encode(timestamp, forKey: .timestamp)
-        // Omit senderID/senderName on wire; receiver uses envelope
+        try c.encodeIfPresent(customLabelName, forKey: .customLabelName)
+        try c.encodeIfPresent(customDescription, forKey: .customDescription)
+        try c.encodeIfPresent(customSystemImage, forKey: .customSystemImage)
     }
 }
 
@@ -112,6 +151,24 @@ public struct MapLabelRecord: Identifiable, Equatable {
     public let date: Date
     public var upVotes: Int
     public var downVotes: Int
+    /// Custom name set by user (for hazard/help/other); nil uses category default.
+    public let customLabelName: String?
+    /// Optional description.
+    public let customDescription: String?
+    /// Optional explicit SF Symbol chosen for the event.
+    public let customSystemImage: String?
+
+    /// Display name: custom name if set, else category default.
+    public var displayName: String {
+        if let name = customLabelName, !name.isEmpty { return name }
+        return category.displayName
+    }
+
+    /// Icon to use when rendering the label.
+    public var systemImage: String {
+        if let img = customSystemImage, !img.isEmpty { return img }
+        return category.systemImage
+    }
 
     public var confidenceScore: Double {
         let total = upVotes + downVotes
@@ -123,7 +180,27 @@ public struct MapLabelRecord: Identifiable, Equatable {
         CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
     }
 
-    public init(id: UUID, category: LabelCategory, latitude: Double, longitude: Double, senderID: String, senderName: String, date: Date, upVotes: Int, downVotes: Int) {
+    /// Events expire 1 hour after creation by default.
+    public static let eventExpirationInterval: TimeInterval = 60 * 60
+
+    public var isExpired: Bool {
+        Date().timeIntervalSince(date) > Self.eventExpirationInterval
+    }
+
+    public init(
+        id: UUID,
+        category: LabelCategory,
+        latitude: Double,
+        longitude: Double,
+        senderID: String,
+        senderName: String,
+        date: Date,
+        upVotes: Int,
+        downVotes: Int,
+        customLabelName: String? = nil,
+        customDescription: String? = nil,
+        customSystemImage: String? = nil
+    ) {
         self.id = id
         self.category = category
         self.latitude = latitude
@@ -133,5 +210,8 @@ public struct MapLabelRecord: Identifiable, Equatable {
         self.date = date
         self.upVotes = upVotes
         self.downVotes = downVotes
+        self.customLabelName = customLabelName
+        self.customDescription = customDescription
+        self.customSystemImage = customSystemImage
     }
 }

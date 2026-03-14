@@ -7,9 +7,11 @@ import CoreLocation
 struct MapTabView: View {
     @EnvironmentObject var mesh: BluetoothMeshService
     @StateObject private var headingProvider = LocationHeadingProvider()
+    @StateObject private var eventTypesManager = EventTypesManager()
 
     private static let defaultCenter = CLLocationCoordinate2D(latitude: -33.8688, longitude: 151.2093)
     private static let defaultSpan = MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
+    private static let maxLabelDistanceMeters = 5_000.0
 
     @State private var region = MKCoordinateRegion(
         center: defaultCenter,
@@ -19,27 +21,53 @@ struct MapTabView: View {
     @State private var isCaching = false
     @State private var showAddLabelSheet = false
     @State private var showCooldownAlert = false
+    @State private var showTooFarAlert = false
     @State private var selectedLabel: MapLabelRecord?
 
-    /// Labels built from mesh.mapLabels + mesh.labelVotes for display and voting.
+    /// Labels built from mesh.mapLabels + mesh.labelVotes; filtered to within 5km and not expired.
     private var labelRecords: [MapLabelRecord] {
-        mesh.mapLabels.map { id, payload in
-            let votes = mesh.labelVotes[id] ?? [:]
-            let upVotes = votes.values.filter { $0 == 1 }.count
-            let downVotes = votes.values.filter { $0 == -1 }.count
-            let category = LabelCategory(rawValue: payload.category) ?? .checkpoint
-            return MapLabelRecord(
-                id: id,
-                category: category,
-                latitude: payload.lat,
-                longitude: payload.lon,
-                senderID: payload.senderID,
-                senderName: payload.senderName,
-                date: Date(timeIntervalSince1970: Double(payload.timestamp) / 1000),
-                upVotes: upVotes,
-                downVotes: downVotes
-            )
+        let now = Date()
+        guard let myLoc = mesh.lastKnownLocation else {
+            return mesh.mapLabels.compactMap { id, payload in
+                buildRecord(id: id, payload: payload)
+            }
+            .filter { now.timeIntervalSince($0.date) <= MapLabelRecord.eventExpirationInterval }
         }
+        return mesh.mapLabels.compactMap { id, payload in
+            guard let record = buildRecord(id: id, payload: payload) else { return nil }
+            guard now.timeIntervalSince(record.date) <= MapLabelRecord.eventExpirationInterval else { return nil }
+            let dist = BluetoothMeshService.haversineMeters(lat1: myLoc.lat, lon1: myLoc.lon, lat2: payload.lat, lon2: payload.lon)
+            guard dist <= Self.maxLabelDistanceMeters else { return nil }
+            return record
+        }
+    }
+
+    private func buildRecord(id: UUID, payload: MapLabelPayload) -> MapLabelRecord? {
+        let votes = mesh.labelVotes[id] ?? [:]
+        let upVotes = votes.values.filter { $0 == 1 }.count
+        let downVotes = votes.values.filter { $0 == -1 }.count
+        let category = LabelCategory(rawValue: payload.category) ?? .checkpoint
+        return MapLabelRecord(
+            id: id,
+            category: category,
+            latitude: payload.lat,
+            longitude: payload.lon,
+            senderID: payload.senderID,
+            senderName: payload.senderName,
+            date: Date(timeIntervalSince1970: Double(payload.timestamp) / 1000),
+            upVotes: upVotes,
+            downVotes: downVotes,
+            customLabelName: payload.customLabelName,
+            customDescription: payload.customDescription,
+            customSystemImage: payload.customSystemImage
+        )
+    }
+
+    /// True if the given coordinate is within 5km of user (or we don't have location).
+    private func isWithinPlacementRange(_ coordinate: CLLocationCoordinate2D) -> Bool {
+        guard let my = mesh.lastKnownLocation else { return true }
+        let dist = BluetoothMeshService.haversineMeters(lat1: my.lat, lon1: my.lon, lat2: coordinate.latitude, lon2: coordinate.longitude)
+        return dist <= Self.maxLabelDistanceMeters
     }
 
     /// Combined annotations: transmitters + labels (single list for Map).
@@ -108,13 +136,16 @@ struct MapTabView: View {
                                     selectedLabel = record
                                 } label: {
                                     VStack(spacing: 2) {
-                                        Image(systemName: record.category.systemImage)
+                                        Image(systemName: record.systemImage)
                                             .font(.title2)
-                                            .foregroundStyle(.red)
-                                        Text(record.category.displayName)
+                                            .foregroundStyle(eventColor(for: record))
+                                        Text(record.displayName)
                                             .font(.caption2)
                                             .lineLimit(1)
                                             .multilineTextAlignment(.center)
+                                        Text(relativeTime(record.date))
+                                            .font(.caption2)
+                                            .foregroundStyle(.secondary)
                                     }
                                     .padding(6)
                                     .background(.background, in: RoundedRectangle(cornerRadius: 8))
@@ -144,7 +175,7 @@ struct MapTabView: View {
                     .allowsHitTesting(false)
                 }
 
-                // Top controls: share toggle + offline + add label
+                // Top controls: share toggle + offline + add label + recenter
                 VStack(spacing: 12) {
                     HStack {
                         Toggle(isOn: shareLocationBinding) {
@@ -155,8 +186,17 @@ struct MapTabView: View {
                         .tint(.accentColor)
                         Spacer()
                         Button {
+                            recenterMap()
+                        } label: {
+                            Image(systemName: "location.circle.fill")
+                                .font(.body)
+                        }
+                        .help("Recenter map on your location")
+                        Button {
                             if mesh.mapLabelCooldownRemaining > 0 {
                                 showCooldownAlert = true
+                            } else if !isWithinPlacementRange(region.center) {
+                                showTooFarAlert = true
                             } else {
                                 showAddLabelSheet = true
                             }
@@ -191,12 +231,24 @@ struct MapTabView: View {
             } message: {
                 Text("Please wait \(Int(ceil(mesh.mapLabelCooldownRemaining))) seconds before placing another label.")
             }
+            .alert("Too far", isPresented: $showTooFarAlert) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text("Place event labels within 5 km of your current location. Turn on Share location and move closer.")
+            }
             .sheet(isPresented: $showOfflineInfo) {
                 OfflineMapSheet(isCaching: $isCaching, region: region, onCache: cacheCurrentRegion)
             }
             .sheet(isPresented: $showAddLabelSheet) {
-                AddLabelSheet(regionCenter: region.center) { category in
-                    mesh.sendMapLabel(category: category, lat: region.center.latitude, lon: region.center.longitude)
+                AddLabelSheet(regionCenter: region.center, eventTypesConfig: eventTypesManager.config) { category, customName, customDescription, iconName in
+                    _ = mesh.sendMapLabel(
+                        category: category,
+                        lat: region.center.latitude,
+                        lon: region.center.longitude,
+                        customLabelName: customName,
+                        customDescription: customDescription,
+                        customSystemImage: iconName
+                    )
                     showAddLabelSheet = false
                 } onCancel: {
                     showAddLabelSheet = false
@@ -206,8 +258,13 @@ struct MapTabView: View {
                 LabelVoteSheet(
                     record: record,
                     myVote: mesh.labelVotes[record.id]?[mesh.identity.deviceID],
+                    canDelete: true,
                     onVote: { up in
                         mesh.voteForLabel(labelId: record.id, up: up)
+                    },
+                    onDelete: {
+                        mesh.removeMapLabel(id: record.id)
+                        selectedLabel = nil
                     },
                     selectedLabel: $selectedLabel
                 )
@@ -258,6 +315,35 @@ struct MapTabView: View {
             longitudeDelta: max(0.005, (maxLon - minLon) * 1.4)
         )
         region = MKCoordinateRegion(center: center, span: span)
+    }
+
+    /// Recenter map on user location, or fit all if no location.
+    private func recenterMap() {
+        if let my = mesh.lastKnownLocation {
+            region = MKCoordinateRegion(
+                center: CLLocationCoordinate2D(latitude: my.lat, longitude: my.lon),
+                span: Self.defaultSpan
+            )
+        } else {
+            fitRegionToAnnotations()
+        }
+    }
+
+    /// Color for event pin: redder = more valid votes (higher confidence score).
+    private func eventColor(for record: MapLabelRecord) -> Color {
+        let score = record.confidenceScore
+        // 0 → green, 0.5 → yellow/orange, 1 → red
+        let red = min(1, score * 2)
+        let green = min(1, (1 - score) * 2)
+        return Color(red: red, green: green, blue: 0.2)
+    }
+
+    private func relativeTime(_ date: Date) -> String {
+        let s = Date().timeIntervalSince(date)
+        if s < 60 { return "now" }
+        if s < 3600 { return "\(Int(s / 60))m ago" }
+        if s < 86400 { return "\(Int(s / 3600))h ago" }
+        return "\(Int(s / 86400))d ago"
     }
 }
 
@@ -346,26 +432,90 @@ extension LocationHeadingProvider: CLLocationManagerDelegate {
     }
 }
 
-// MARK: - Add label (category picker)
+// MARK: - Add label (event type + optional custom name/description)
 
 private struct AddLabelSheet: View {
     let regionCenter: CLLocationCoordinate2D
-    let onSelect: (LabelCategory) -> Void
+    let eventTypesConfig: EventTypesConfig
+    let onSelect: (LabelCategory, String?, String?, String?) -> Void
     let onCancel: () -> Void
     @Environment(\.dismiss) private var dismiss
+    @State private var customName = ""
+    @State private var customDescription = ""
+    @State private var selectedCategory: LabelCategory?
+    @State private var selectedIcon: String?
+
+    private func displayName(for category: LabelCategory) -> String {
+        switch category {
+        case .hazard: return eventTypesConfig.hazard.name
+        case .help: return eventTypesConfig.help.name
+        case .other: return eventTypesConfig.other.name
+        default: return category.displayName
+        }
+    }
+
+    private func displayDescription(for category: LabelCategory) -> String {
+        switch category {
+        case .hazard: return eventTypesConfig.hazard.description
+        case .help: return eventTypesConfig.help.description
+        case .other: return eventTypesConfig.other.description
+        default: return ""
+        }
+    }
 
     var body: some View {
         NavigationStack {
             List {
-                Text("Place a label at the current map center. Others can vote on validity.")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                ForEach(LabelCategory.allCases, id: \.rawValue) { category in
-                    Button {
-                        onSelect(category)
-                        dismiss()
-                    } label: {
-                        Label(category.displayName, systemImage: category.systemImage)
+                Section {
+                    Text("Place a label at the current map center. Set a name and description; others can vote on validity.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                Section("Event type") {
+                    ForEach(LabelCategory.configurableEventTypes, id: \.rawValue) { category in
+                        Button {
+                            selectedCategory = category
+                        } label: {
+                            HStack {
+                                Image(systemName: category.systemImage)
+                                Text(displayName(for: category))
+                                if selectedCategory == category {
+                                    Spacer()
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .foregroundStyle(.green)
+                                }
+                            }
+                        }
+                    }
+                }
+                if selectedCategory != nil {
+                    Section("Icon") {
+                        let icons = ["exclamationmark.triangle.fill", "flame.fill", "car.fill", "bandage.fill", "cross.case.fill", "phone.fill", "questionmark.circle.fill", "figure.wave"]
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 12) {
+                                ForEach(icons, id: \.self) { name in
+                                    Button {
+                                        selectedIcon = name
+                                    } label: {
+                                        Image(systemName: name)
+                                            .font(.title2)
+                                            .padding(8)
+                                            .background(
+                                                Circle()
+                                                    .strokeBorder(selectedIcon == name ? Color.accentColor : Color.secondary.opacity(0.3), lineWidth: selectedIcon == name ? 2 : 1)
+                                            )
+                                    }
+                                }
+                            }
+                            .padding(.vertical, 4)
+                        }
+                    }
+                    Section("Label name (optional)") {
+                        TextField("Custom name", text: $customName)
+                    }
+                    Section("Description (optional)") {
+                        TextField("Description", text: $customDescription, axis: .vertical)
+                            .lineLimit(2...4)
                     }
                 }
             }
@@ -378,6 +528,19 @@ private struct AddLabelSheet: View {
                         dismiss()
                     }
                 }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Place") {
+                        guard let cat = selectedCategory else { return }
+                        onSelect(
+                            cat,
+                            customName.isEmpty ? nil : customName,
+                            customDescription.isEmpty ? nil : customDescription,
+                            selectedIcon
+                        )
+                        dismiss()
+                    }
+                    .disabled(selectedCategory == nil)
+                }
             }
         }
     }
@@ -388,15 +551,23 @@ private struct AddLabelSheet: View {
 private struct LabelVoteSheet: View {
     let record: MapLabelRecord
     let myVote: Int?
+    let canDelete: Bool
     let onVote: (Bool) -> Void
+    let onDelete: () -> Void
     @Binding var selectedLabel: MapLabelRecord?
+    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         NavigationStack {
             List {
                 Section {
-                    Label(record.category.displayName, systemImage: record.category.systemImage)
+                    Label(record.displayName, systemImage: record.category.systemImage)
                         .font(.headline)
+                    if let desc = record.customDescription, !desc.isEmpty {
+                        Text(desc)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
                     Text("By \(record.senderName)")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
@@ -444,6 +615,16 @@ private struct LabelVoteSheet: View {
             .navigationTitle("Label")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    if canDelete {
+                        Button(role: .destructive) {
+                            onDelete()
+                            dismiss()
+                        } label: {
+                            Label("Delete", systemImage: "trash")
+                        }
+                    }
+                }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") {
                         selectedLabel = nil

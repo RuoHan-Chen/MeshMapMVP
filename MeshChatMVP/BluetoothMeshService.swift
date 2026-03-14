@@ -239,11 +239,28 @@ final class BluetoothMeshService: NSObject, ObservableObject {
         _ = broadcastEnvelope(env, excludeCentral: nil, excludePeripheral: nil)
     }
 
-    /// Call from main. Returns false if on cooldown (30s); true if send was queued.
-    func sendMapLabel(category: LabelCategory, lat: Double, lon: Double) -> Bool {
+    /// Maximum distance (meters) for placing an event label.
+    static let maxEventPlacementDistanceMeters: Double = 5_000
+
+    /// Call from main. Returns false if on cooldown (30s) or beyond 5km; true if send was queued.
+    func sendMapLabel(
+        category: LabelCategory,
+        lat: Double,
+        lon: Double,
+        customLabelName: String? = nil,
+        customDescription: String? = nil,
+        customSystemImage: String? = nil
+    ) -> Bool {
         if mapLabelCooldownRemaining > 0 {
             log("Map label: cooldown (\(Int(mapLabelCooldownRemaining))s left)")
             return false
+        }
+        if let my = lastKnownLocation {
+            let dist = Self.haversineMeters(lat1: my.lat, lon1: my.lon, lat2: lat, lon2: lon)
+            if dist > Self.maxEventPlacementDistanceMeters {
+                log("Map label: too far (\(Int(dist))m > 5km)")
+                return false
+            }
         }
         lastMapLabelSendTime = Date()
         mapLabelCooldownRemaining = mapLabelCooldownSeconds
@@ -256,7 +273,10 @@ final class BluetoothMeshService: NSObject, ObservableObject {
             lon: lon,
             senderID: identity.deviceID,
             senderName: String(identity.nickname.prefix(32)),
-            timestamp: UInt64(Date().timeIntervalSince1970 * 1000)
+            timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+            customLabelName: customLabelName?.isEmpty == true ? nil : customLabelName,
+            customDescription: customDescription?.isEmpty == true ? nil : customDescription,
+            customSystemImage: customSystemImage?.isEmpty == true ? nil : customSystemImage
         )
         guard let payloadData = try? JSONEncoder().encode(payload) else {
             log("Map label: encode payload failed")
@@ -318,6 +338,17 @@ final class BluetoothMeshService: NSObject, ObservableObject {
         let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: UNTimeIntervalNotificationTrigger(timeInterval: 0.1, repeats: false))
         UNUserNotificationCenter.current().add(request)
     }
+
+    /// Remove a map label from local storage only (no wire delete). Call from main.
+    func removeMapLabel(id: UUID) {
+        DispatchQueue.main.async { [weak self] in
+            self?.mapLabels.removeValue(forKey: id)
+            self?.labelVotes.removeValue(forKey: id)
+        }
+    }
+
+    /// Default message expiration interval (20 minutes).
+    static let messageExpirationInterval: TimeInterval = 20 * 60
 
     func voteForLabel(labelId: UUID, up: Bool) {
         let vote = up ? 1 : -1
@@ -574,7 +605,10 @@ final class BluetoothMeshService: NSObject, ObservableObject {
                     lon: wire.lon,
                     senderID: env.senderID,
                     senderName: env.senderName,
-                    timestamp: wire.timestamp
+                    timestamp: wire.timestamp,
+                    customLabelName: wire.customLabelName,
+                    customDescription: wire.customDescription,
+                    customSystemImage: wire.customSystemImage
                 )
                 let categoryDisplay = LabelCategory(rawValue: wire.category)?.displayName ?? wire.category
                 let senderName = env.senderName
@@ -639,8 +673,8 @@ final class BluetoothMeshService: NSObject, ObservableObject {
         }
     }
 
-    /// Haversine distance in meters between two WGS84 coordinates.
-    private static func haversineMeters(lat1: Double, lon1: Double, lat2: Double, lon2: Double) -> Double {
+    /// Haversine distance in meters between two WGS84 coordinates (public for 5km limit check).
+    static func haversineMeters(lat1: Double, lon1: Double, lat2: Double, lon2: Double) -> Double {
         let R = 6_371_000.0 // Earth radius in meters
         let toRad = { (d: Double) in d * .pi / 180 }
         let dLat = toRad(lat2 - lat1)

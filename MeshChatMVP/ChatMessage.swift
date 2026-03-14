@@ -12,4 +12,11 @@ struct ChatMessage: Identifiable, Equatable {
     var isLocal: Bool
     /// Inferred distance from this device to the sender in meters; nil if unknown or opted out.
     var distanceFromMe: Double?
+
+    /// Messages expire after 20 minutes by default.
+    static let expirationInterval: TimeInterval = 20 * 60
+
+    var isExpired: Bool {
+        Date().timeIntervalSince(date) > Self.expirationInterval
+    }
 }
