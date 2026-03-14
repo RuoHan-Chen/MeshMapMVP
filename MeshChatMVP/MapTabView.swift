@@ -261,9 +261,9 @@ struct MapTabView: View {
                     )
                     .ignoresSafeArea(edges: .all)
                     .onAppear { fitRegionToAnnotations() }
-                    .onChange(of: mesh.senderCoordinates.count) { _ in fitRegionToAnnotations() }
-                    .onChange(of: mesh.identity.shareLocation) { _ in fitRegionToAnnotations() }
-                    .onChange(of: mesh.mapLabels.count) { _ in fitRegionToAnnotations() }
+                    // .onChange(of: mesh.senderCoordinates.count) { _ in fitRegionToAnnotations() }
+                    // .onChange(of: mesh.identity.shareLocation) { _ in fitRegionToAnnotations() }
+                    // .onChange(of: mesh.mapLabels.count) { _ in fitRegionToAnnotations() }
                     
                     // Peer Tooltip
                     if let p = selectedPeerPopover {
@@ -452,6 +452,7 @@ struct MapTabView: View {
                 )
             }
         }
+        .preferredColorScheme(.dark)
     }
 
     /// Binding that updates identity via existing updateIdentity (no change to identity logic).

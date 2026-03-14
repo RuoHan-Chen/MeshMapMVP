@@ -410,12 +410,14 @@ struct ChatView: View {
                 } else {
                     Text(m.text)
                         .font(.body)
+                        .foregroundColor(m.isLocal ? .white : .primary)
                 }
             }
             .padding(12)
             .background(
                 RoundedRectangle(cornerRadius: 16)
-                    .fill(m.isLocal ? Color.accentColor.opacity(0.2) : Color(.secondarySystemBackground))
+                    .fill(m.isLocal ? Color(red: 0.1, green: 0.25, blue: 0.5) : Color.white)
+                    .shadow(color: Color.black.opacity(0.05), radius: 2, x: 0, y: 1)
             )
         }
     }

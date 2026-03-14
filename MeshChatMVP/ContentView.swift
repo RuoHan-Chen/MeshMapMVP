@@ -231,6 +231,7 @@ struct AlertsFeedView: View {
     @EnvironmentObject var mesh: BluetoothMeshService
     @State private var recentAnnouncements: [AnnouncementItem] = []
     @State private var selectedLabel: MapLabelRecord?
+    @State private var announcedPeerIDs: Set<UUID> = []
     
     // MARK: - Models
     
@@ -414,18 +415,12 @@ struct AlertsFeedView: View {
     
     private func updateAnnouncements(peers: [DiscoveredPeer]) {
         // Simple diff logic: if count increased, add "New peer"
-        // Ideally we'd track IDs, but for MVP we'll just look for new ones if we had state.
-        // Since we don't have previous state easily here without more complex logic,
-        // we will just check for "newly discovered" based on lastSeen if it's very recent.
-        // Actually, the prompt says "from mesh.discoveredPeers changes".
-        // Let's just grab the most recent one if it was seen in the last 10 seconds.
-        
         let now = Date().timeIntervalSince1970
         let recent = peers.filter { now - Double($0.lastSeen) < 10 }
         
         for peer in recent {
-            // Check if we already have an announcement for this peer in the last minute
-            if !recentAnnouncements.contains(where: { $0.title.contains(peer.name) && Date().timeIntervalSince($0.date) < 60 }) {
+            if !announcedPeerIDs.contains(peer.id) {
+                announcedPeerIDs.insert(peer.id)
                 let item = AnnouncementItem(
                     icon: "person.wave.2.fill",
                     title: "New peer discovered",
@@ -454,32 +449,36 @@ struct IncidentBanner: View {
             Image(systemName: record.systemImage)
                 .font(.title)
                 .foregroundColor(.white)
+                .frame(width: 48, height: 48)
+                .background(Color.red.opacity(0.8))
+                .cornerRadius(8)
             
             VStack(alignment: .leading, spacing: 4) {
-                Text(record.displayName)
+                Text("Active incident nearby")
                     .font(.headline)
-                    .foregroundColor(.white)
+                    .foregroundColor(.primary)
                 
                 HStack(spacing: 6) {
+                    Text("\(record.displayName) ·")
                     if let myLoc = mesh.lastKnownLocation {
                         let dist = BluetoothMeshService.haversineMeters(lat1: myLoc.lat, lon1: myLoc.lon, lat2: record.latitude, lon2: record.longitude)
                         Text(String(format: "%.0fm away", dist))
                     }
-                    Text("·")
-                    Text("\(record.upVotes + record.downVotes) votes")
-                    Text("·")
-                    Text(relativeTime(record.date))
+                    Text("· \(record.upVotes + record.downVotes) votes")
                 }
                 .font(.caption.monospaced())
-                .foregroundColor(.white.opacity(0.9))
+                .foregroundColor(.secondary)
             }
             Spacer()
-            Image(systemName: "chevron.right")
-                .foregroundColor(.white.opacity(0.7))
+            Text(relativeTime(record.date))
+                .font(.caption)
+                .foregroundColor(.secondary)
         }
         .padding()
-        .background(Color.meshAccent)
-        .cornerRadius(0) // Full width strip? Prompt says "banner", usually implies full width or card. "prominent banner... strip"
+        .background(Color(UIColor.secondarySystemBackground)) // Light red/pinkish in screenshot?
+        .background(Color.red.opacity(0.1))
+        .cornerRadius(16)
+        .padding(.horizontal, 12)
     }
     
     private func relativeTime(_ date: Date) -> String {
@@ -499,30 +498,32 @@ struct EventRow: View {
             // Left: coloured icon square
             ZStack {
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(severityColor)
+                    .fill(severityColor.opacity(0.15)) // Lighter background
                     .frame(width: 48, height: 48)
                 Image(systemName: record.systemImage)
                     .font(.title3)
-                    .foregroundColor(.white)
+                    .foregroundColor(severityColor) // Darker icon
             }
             
             // Middle: label details
             VStack(alignment: .leading, spacing: 4) {
-                Text(record.displayName)
+                Text("\(record.displayName) — \(record.customLabelName ?? "Incident")")
                     .font(.headline)
+                    .lineLimit(1)
                 
-                HStack(spacing: 6) {
-                    Text(record.senderName)
-                        .font(.caption.monospaced())
+                HStack(spacing: 4) {
+                    Text("Reported by \(record.senderName)")
                     if let myLoc = mesh.lastKnownLocation {
                         let dist = BluetoothMeshService.haversineMeters(lat1: myLoc.lat, lon1: myLoc.lon, lat2: record.latitude, lon2: record.longitude)
-                        Text("· \(Int(dist))m")
-                            .font(.caption)
+                        Text("· \(distanceString(dist))")
                     }
-                    Text("· \(record.category.displayName)")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                    if record.confidenceScore > 0.8 {
+                        Text("· CRITICAL")
+                            .foregroundColor(.red)
+                            .fontWeight(.bold)
+                    }
                 }
+                .font(.caption)
                 .foregroundColor(.secondary)
             }
             
@@ -531,16 +532,22 @@ struct EventRow: View {
             // Right: time + hop indicator
             VStack(alignment: .trailing, spacing: 4) {
                 Text(relativeTime(record.date))
-                    .font(.caption)
+                    .font(.caption.monospacedDigit())
                     .foregroundColor(.secondary)
                 
-                // Hop indicator stub (we don't track hops for map labels in MapLabelRecord, assume 1 for now or random for UI demo)
-                HopIndicator(hops: 1, maxHops: 5)
+                // Hop indicator stub
+                HopIndicator(hops: 1, maxHops: 3)
             }
         }
-        .padding(10)
-        .background(Color(UIColor.secondarySystemBackground))
-        .cornerRadius(12)
+        .padding(12)
+        .background(Color(UIColor.systemBackground))
+        .cornerRadius(16)
+        .shadow(color: Color.black.opacity(0.05), radius: 2, x: 0, y: 1)
+    }
+    
+    private func distanceString(_ meters: Double) -> String {
+        if meters < 1000 { return "\(Int(meters)) m" }
+        return String(format: "%.1f km", meters / 1000)
     }
     
     private var severityColor: Color {
@@ -573,12 +580,12 @@ struct ProfileView: View {
                 VStack(spacing: 24) {
                     // Header section
                     VStack(spacing: 12) {
-                        Circle()
-                            .fill(Color.blue)
-                            .frame(width: 64, height: 64)
+                        RoundedRectangle(cornerRadius: 20)
+                            .fill(Color.blue) // Screenshot shows dark blue
+                            .frame(width: 80, height: 80)
                             .overlay(
                                 Text(initials(for: mesh.identity.nickname))
-                                    .font(.title)
+                                    .font(.largeTitle)
                                     .fontWeight(.bold)
                                     .foregroundColor(.white)
                             )
@@ -587,30 +594,19 @@ struct ProfileView: View {
                             .font(.title2)
                             .fontWeight(.bold)
                         
-                        Button {
-                            UIPasteboard.general.string = KeyManager.fingerprint(KeyManager.publicKeyData, length: 20)
-                            showCopiedAlert = true
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-                                showCopiedAlert = false
-                            }
-                        } label: {
-                            HStack {
-                                Text(KeyManager.fingerprint(KeyManager.publicKeyData, length: 20))
-                                    .font(.caption.monospaced())
-                                if showCopiedAlert {
-                                    Image(systemName: "checkmark")
-                                        .font(.caption)
-                                } else {
-                                    Image(systemName: "doc.on.doc")
-                                        .font(.caption)
-                                }
-                            }
+                        Text(KeyManager.fingerprint(KeyManager.publicKeyData, length: 20))
+                            .font(.caption.monospaced())
                             .padding(.horizontal, 12)
                             .padding(.vertical, 6)
                             .background(Color(UIColor.secondarySystemBackground))
                             .cornerRadius(8)
-                        }
-                        .buttonStyle(.plain)
+                            .onTapGesture {
+                                UIPasteboard.general.string = KeyManager.fingerprint(KeyManager.publicKeyData, length: 20)
+                                showCopiedAlert = true
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                                    showCopiedAlert = false
+                                }
+                            }
                     }
                     .padding(.top, 20)
                     
