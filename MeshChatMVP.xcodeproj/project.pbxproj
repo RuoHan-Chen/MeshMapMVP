@@ -27,6 +27,8 @@
 		A1000012 /* AlertPayload.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000013 /* AlertPayload.swift */; };
 		A1000013 /* VouchPayload.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000014 /* VouchPayload.swift */; };
 		A1000014 /* DatabaseManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000015 /* DatabaseManager.swift */; };
+		A1000015 /* MapTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000016 /* MapTabView.swift */; };
+		A1000016 /* MapLabelModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000017 /* MapLabelModels.swift */; };
 		D974FBAF2F651AD7008F4874 /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = D974FBAE2F651AD7008F4874 /* GRDB */; };
 /* End PBXBuildFile section */
 
@@ -52,6 +54,8 @@
 		A2000013 /* AlertPayload.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlertPayload.swift; sourceTree = "<group>"; };
 		A2000014 /* VouchPayload.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VouchPayload.swift; sourceTree = "<group>"; };
 		A2000015 /* DatabaseManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DatabaseManager.swift; sourceTree = "<group>"; };
+		A2000016 /* MapTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapTabView.swift; sourceTree = "<group>"; };
+		A2000017 /* MapLabelModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapLabelModels.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -81,6 +85,7 @@
 				A2000002 /* ContentView.swift */,
 				A200000C /* ChatView.swift */,
 				A200000D /* DebugDashboardView.swift */,
+				A2000016 /* MapTabView.swift */,
 				A2000003 /* BluetoothMeshService.swift */,
 				A2000004 /* MeshEnvelope.swift */,
 				A2000005 /* MessageType.swift */,
@@ -96,6 +101,7 @@
 				A2000013 /* AlertPayload.swift */,
 				A2000014 /* VouchPayload.swift */,
 				A2000015 /* DatabaseManager.swift */,
+				A2000017 /* MapLabelModels.swift */,
 				A200000A /* Assets.xcassets */,
 			);
 			path = MeshChatMVP;
@@ -200,6 +206,8 @@
 				A1000012 /* AlertPayload.swift in Sources */,
 				A1000013 /* VouchPayload.swift in Sources */,
 				A1000014 /* DatabaseManager.swift in Sources */,
+				A1000015 /* MapTabView.swift in Sources */,
+				A1000016 /* MapLabelModels.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
