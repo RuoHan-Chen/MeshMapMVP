@@ -10,4 +10,6 @@ struct ChatMessage: Identifiable, Equatable {
     let date: Date
     /// True if this device only relayed (we still show same as receive for MVP).
     var isLocal: Bool
+    /// Inferred distance from this device to the sender in meters; nil if unknown or opted out.
+    var distanceFromMe: Double?
 }

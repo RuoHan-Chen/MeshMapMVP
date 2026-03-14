@@ -46,11 +46,21 @@ MeshChatMVP/
 
 ---
 
+## Coordinate sharing & distance
+
+- **Optional location:** When **Share my location with peers** is on (You → Privacy), envelopes include `senderLatitude` / `senderLongitude` so peers can show inferred distance.
+- **Opt-out:** Users can turn the toggle off anytime; no coordinates are sent when off.
+- **Distance in chat:** For messages from others who share location, the UI shows e.g. "~150 m away" or "~2.3 km away" (Haversine from your last known location to their last shared coordinates).
+- **Storage:** Last known coordinates per sender are kept in memory; your location is updated via Core Location when the app is in use and sharing is on.
+
+---
+
 ## Info.plist / permissions
 
 - **NSBluetoothAlwaysUsageDescription** — set in Xcode build settings as  
   `INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription`  
   (already in `project.pbxproj`).
+- **NSLocationWhenInUseUsageDescription** — used when coordinate sharing is enabled so distance can be shown (user can opt out in You → Privacy).
 
 No background modes required for foreground demo.
 

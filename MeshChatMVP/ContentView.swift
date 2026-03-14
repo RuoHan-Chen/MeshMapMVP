@@ -42,6 +42,19 @@ private struct ProfileView: View {
                             .textSelection(.enabled)
                     }
                 }
+                Section("Privacy") {
+                    Toggle("Share my location with peers", isOn: Binding(
+                        get: { mesh.identity.shareLocation },
+                        set: { newValue in
+                            var id = mesh.identity
+                            id.shareLocation = newValue
+                            mesh.updateIdentity(id)
+                        }
+                    ))
+                    Text("When on, your coordinates are included in messages so others can see approximate distance. You can turn this off anytime.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
                 Section("Tips") {
                     Text("Open Chat on both phones. Dashboard shows scan windows and auto-connect. Keep apps in foreground for best results.")
                         .font(.caption)

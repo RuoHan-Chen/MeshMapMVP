@@ -110,6 +110,9 @@ struct ChatView: View {
                     Text(m.date, style: .time).font(.caption2).foregroundStyle(.secondary)
                     if m.isLocal { Text("You").font(.caption.weight(.semibold)) }
                 }
+                if !m.isLocal, let dist = m.distanceFromMe {
+                    Text(distanceString(dist)).font(.caption2).foregroundStyle(.secondary)
+                }
                 Text(m.text)
                     .font(.body)
                     .padding(12)
@@ -120,6 +123,11 @@ struct ChatView: View {
             }
             if !m.isLocal { Spacer(minLength: 48) }
         }
+    }
+
+    private func distanceString(_ meters: Double) -> String {
+        if meters < 1000 { return "~\(Int(round(meters))) m away" }
+        return String(format: "~%.1f km away", meters / 1000)
     }
 }
 

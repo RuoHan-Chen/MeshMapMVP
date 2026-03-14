@@ -9,6 +9,9 @@ struct MeshEnvelope: Codable, Equatable {
     var timestamp: UInt64
     var ttl: UInt8
     var payload: Data
+    /// Optional sender coordinates for distance inference (only set if sender opted in).
+    var senderLatitude: Double?
+    var senderLongitude: Double?
 
     static func encodeJSON(_ envelope: MeshEnvelope) -> Data? {
         try? JSONEncoder().encode(envelope)

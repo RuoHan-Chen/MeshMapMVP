@@ -1,5 +1,6 @@
 import Foundation
 import CoreBluetooth
+import CoreLocation
 
 // MARK: - GATT UUIDs (single service + single characteristic)
 private let kMeshServiceUUID = CBUUID(string: "6E400001-B5A3-F393-E0A9-E50E24DCCA9E")
@@ -33,6 +34,10 @@ final class BluetoothMeshService: NSObject, ObservableObject {
     @Published var debugLines: [String] = []
     @Published var identity: DeviceIdentity
     @Published var announceNicknames: [String: String] = [:]
+    /// Last known coordinates for distance display; updated when shareLocation is on.
+    @Published private(set) var lastKnownLocation: (lat: Double, lon: Double)?
+    /// Sender ID → (lat, lon) from received envelopes (only when senders share location).
+    @Published var senderCoordinates: [String: (lat: Double, lon: Double)] = [:]
 
     /// Battery-friendly: scan only during windows; idle between.
     @Published var isScanning: Bool = false
@@ -49,6 +54,7 @@ final class BluetoothMeshService: NSObject, ObservableObject {
     private let central: CBCentralManager
     private let peripheral: CBPeripheralManager
     private let bleQueue = DispatchQueue(label: "meshchat.ble")
+    private let locationManager = CLLocationManager()
 
     private var meshCharacteristic: CBMutableCharacteristic?
     private var subscribedCentrals: [CBCentral] = []
@@ -85,6 +91,9 @@ final class BluetoothMeshService: NSObject, ObservableObject {
         super.init()
         central.delegate = self
         peripheral.delegate = self
+        locationManager.delegate = self
+        locationManager.desiredAccuracy = kCLLocationAccuracyHundredMeters
+        locationManager.requestWhenInUseAuthorization()
         startPruneTimer()
     }
 
@@ -97,11 +106,22 @@ final class BluetoothMeshService: NSObject, ObservableObject {
     func updateIdentity(_ id: DeviceIdentity) {
         identity = id
         id.save()
+        if id.shareLocation {
+            locationManager.startUpdatingLocation()
+        } else {
+            locationManager.stopUpdatingLocation()
+            DispatchQueue.main.async { [weak self] in
+                self?.lastKnownLocation = nil
+            }
+        }
         log("Identity saved; advertising name updated.")
         bleQueue.async { [weak self] in self?.restartAdvertisingOnly() }
     }
 
     func start() {
+        if identity.shareLocation {
+            locationManager.startUpdatingLocation()
+        }
         bleQueue.async { [weak self] in
             self?.setupPeripheralIfPowered()
             self?.scheduleScanCycle()
@@ -184,15 +204,21 @@ final class BluetoothMeshService: NSObject, ObservableObject {
             log("Encode chat payload failed")
             return
         }
-        let env = MeshEnvelope(
+        var env = MeshEnvelope(
             id: UUID(),
             type: .message,
             senderID: identity.deviceID,
             senderName: identity.nickname,
             timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
             ttl: defaultTTL,
-            payload: payloadData
+            payload: payloadData,
+            senderLatitude: nil,
+            senderLongitude: nil
         )
+        if identity.shareLocation, let loc = lastKnownLocation {
+            env.senderLatitude = loc.lat
+            env.senderLongitude = loc.lon
+        }
         appendLocalChat(envelope: env, text: trimmed)
         broadcastEnvelope(env, excludeCentral: nil, excludePeripheral: nil)
     }
@@ -392,19 +418,28 @@ final class BluetoothMeshService: NSObject, ObservableObject {
             }
         case .message:
             if let chat = try? JSONDecoder().decode(ChatPayload.self, from: env.payload) {
+                let envCopy = env
                 DispatchQueue.main.async { [weak self] in
-                    self?.chatMessages.append(
+                    guard let self else { return }
+                    let distance = self.distanceFromMe(senderID: envCopy.senderID)
+                    self.chatMessages.append(
                         ChatMessage(
                             id: UUID(),
-                            envelopeId: env.id,
-                            senderID: env.senderID,
-                            senderName: env.senderName,
+                            envelopeId: envCopy.id,
+                            senderID: envCopy.senderID,
+                            senderName: envCopy.senderName,
                             text: chat.text,
                             date: Date(),
-                            isLocal: env.senderID == self?.identity.deviceID
+                            isLocal: envCopy.senderID == self.identity.deviceID,
+                            distanceFromMe: distance
                         )
                     )
                 }
+            }
+        }
+        if let lat = env.senderLatitude, let lon = env.senderLongitude {
+            DispatchQueue.main.async { [weak self] in
+                self?.senderCoordinates[env.senderID] = (lat, lon)
             }
         }
         if env.ttl > 1 {
@@ -427,29 +462,70 @@ final class BluetoothMeshService: NSObject, ObservableObject {
                     senderName: envelope.senderName,
                     text: text,
                     date: Date(),
-                    isLocal: true
+                    isLocal: true,
+                    distanceFromMe: nil
                 )
             )
         }
     }
 
-    private func sendAnnounce(to centrals: [CBCentral]? = nil) {
-        guard let nickData = try? JSONEncoder().encode(AnnouncementPayload(nickname: identity.nickname)) else { return }
-        let env = MeshEnvelope(
+    /// Haversine distance in meters between two WGS84 coordinates.
+    private static func haversineMeters(lat1: Double, lon1: Double, lat2: Double, lon2: Double) -> Double {
+        let R = 6_371_000.0 // Earth radius in meters
+        let toRad = { (d: Double) in d * .pi / 180 }
+        let dLat = toRad(lat2 - lat1)
+        let dLon = toRad(lon2 - lon1)
+        let a = sin(dLat / 2) * sin(dLat / 2) +
+            cos(toRad(lat1)) * cos(toRad(lat2)) * sin(dLon / 2) * sin(dLon / 2)
+        let c = 2 * atan2(sqrt(a), sqrt(1 - a))
+        return R * c
+    }
+
+    /// Distance in meters from this device to the sender; nil if unknown.
+    private func distanceFromMe(senderID: String) -> Double? {
+        guard senderID != identity.deviceID,
+              let my = lastKnownLocation,
+              let other = senderCoordinates[senderID] else { return nil }
+        return Self.haversineMeters(lat1: my.lat, lon1: my.lon, lat2: other.lat, lon2: other.lon)
+    }
+
+    /// Build announce envelope on main so we can include location if shareLocation is on.
+    private func buildAnnounceEnvelope() -> MeshEnvelope? {
+        guard let nickData = try? JSONEncoder().encode(AnnouncementPayload(nickname: identity.nickname)) else { return nil }
+        var env = MeshEnvelope(
             id: UUID(),
             type: .announce,
             senderID: identity.deviceID,
             senderName: identity.nickname,
             timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
             ttl: 2,
-            payload: nickData
+            payload: nickData,
+            senderLatitude: nil,
+            senderLongitude: nil
         )
-        guard let data = MeshEnvelope.encodeJSON(env) else { return }
+        if identity.shareLocation, let loc = lastKnownLocation {
+            env.senderLatitude = loc.lat
+            env.senderLongitude = loc.lon
+        }
+        return env
+    }
+
+    private func broadcastAnnounce(_ envelope: MeshEnvelope, to centrals: [CBCentral]?) {
+        guard let data = MeshEnvelope.encodeJSON(envelope), data.count <= 512 else { return }
         if let char = meshCharacteristic {
             if let centrals {
                 _ = peripheral.updateValue(data, for: char, onSubscribedCentrals: centrals)
             } else {
                 _ = peripheral.updateValue(data, for: char, onSubscribedCentrals: nil)
+            }
+        }
+    }
+
+    private func sendAnnounce(to centrals: [CBCentral]? = nil) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self, let env = self.buildAnnounceEnvelope() else { return }
+            self.bleQueue.async { [weak self] in
+                self?.broadcastAnnounce(env, to: centrals)
             }
         }
     }
@@ -696,6 +772,28 @@ extension BluetoothMeshService: CBPeripheralManagerDelegate {
                 handleIncomingData(data, sourceCentral: req.central, sourcePeripheral: nil)
             }
             peripheral.respond(to: req, withResult: .success)
+        }
+    }
+}
+
+// MARK: - CLLocationManagerDelegate
+
+extension BluetoothMeshService: CLLocationManagerDelegate {
+    func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+        guard let loc = locations.last else { return }
+        DispatchQueue.main.async { [weak self] in
+            self?.lastKnownLocation = (loc.coordinate.latitude, loc.coordinate.longitude)
+        }
+    }
+
+    func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+        switch manager.authorizationStatus {
+        case .authorizedWhenInUse, .authorizedAlways:
+            if identity.shareLocation {
+                locationManager.startUpdatingLocation()
+            }
+        default:
+            break
         }
     }
 }
