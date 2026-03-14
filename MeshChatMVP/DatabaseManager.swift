@@ -276,6 +276,19 @@ extension DatabaseManager {
             try Vouch.filter(Column("alertID") == alertID).fetchAll(db)
         }
     }
+
+    /// Returns all non-expired alerts paired with their vouches in a single read transaction.
+    /// Used by the trust engine to avoid N+1 queries.
+    func alertsWithVouches() throws -> [(alert: Alert, vouches: [Vouch])] {
+        let now = Int64(Date().timeIntervalSince1970)
+        return try dbQueue.read { db in
+            let alerts = try Alert.filter(Column("expiresAt") > now).fetchAll(db)
+            return try alerts.map { alert in
+                let vouches = try Vouch.filter(Column("alertID") == alert.id).fetchAll(db)
+                return (alert, vouches)
+            }
+        }
+    }
 }
 
 // MARK: - Node Sightings

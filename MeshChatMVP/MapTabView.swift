@@ -27,6 +27,9 @@ struct MapTabView: View {
     @State private var selectedLabel: MapLabelRecord?
     @State private var selectedCluster: LabelCluster?
     @State private var showSOSAlert = false
+    /// Cached trust inputs loaded from the database.
+    @State private var labelRelationships: [String: String] = [:]
+    @State private var labelSightings: [String: NodeSighting] = [:]
 
     /// Labels built from mesh.mapLabels + mesh.labelVotes; filtered to within 5km and not expired.
     private var labelRecords: [MapLabelRecord] {
@@ -47,10 +50,18 @@ struct MapTabView: View {
     }
 
     private func buildRecord(id: UUID, payload: MapLabelPayload) -> MapLabelRecord? {
-        let votes = mesh.labelVotes[id] ?? [:]
-        let upVotes = votes.values.filter { $0 == 1 }.count
-        let downVotes = votes.values.filter { $0 == -1 }.count
+        let votes    = mesh.labelVotes[id] ?? [:]
         let category = LabelCategory(rawValue: payload.category) ?? .checkpoint
+        let score    = AlertTrustEngine.scoreLabel(
+            authorID:     payload.senderID,
+            lat:          payload.lat,
+            lon:          payload.lon,
+            timestampMs:  payload.timestamp,
+            votes:        votes,
+            relationships: labelRelationships,
+            sightings:    labelSightings,
+            myDeviceID:   mesh.identity.deviceID
+        )
         return MapLabelRecord(
             id: id,
             category: category,
@@ -59,12 +70,38 @@ struct MapTabView: View {
             senderID: payload.senderID,
             senderName: payload.senderName,
             date: Date(timeIntervalSince1970: Double(payload.timestamp) / 1000),
-            upVotes: upVotes,
-            downVotes: downVotes,
+            trustScore: score,
+            voteCount: votes.count,
             customLabelName: payload.customLabelName,
             customDescription: payload.customDescription,
             customSystemImage: payload.customSystemImage
         )
+    }
+
+    /// Loads saved-contact relationships and node sightings from the DB for trust scoring.
+    private func loadTrustData() {
+        let currentLabels = mesh.mapLabels
+        let currentVotes  = mesh.labelVotes
+        DispatchQueue.global(qos: .utility).async {
+            let contacts = (try? DatabaseManager.shared.listContacts()) ?? []
+            var relationships: [String: String] = [:]
+            for sc in contacts {
+                let sid = DatabaseManager.canonicalSenderID(publicKey: sc.publicKey)
+                relationships[sid] = sc.relationship
+            }
+            var nodeIDs = Set(currentLabels.values.map { $0.senderID })
+            for votes in currentVotes.values { nodeIDs.formUnion(votes.keys) }
+            var sightings: [String: NodeSighting] = [:]
+            for nodeID in nodeIDs {
+                if let s = try? DatabaseManager.shared.recentSightings(for: nodeID, limit: 1).first {
+                    sightings[nodeID] = s
+                }
+            }
+            DispatchQueue.main.async {
+                labelRelationships = relationships
+                labelSightings     = sightings
+            }
+        }
     }
 
     /// True if the given coordinate is within 5km of user (or we don't have location).
@@ -173,7 +210,7 @@ struct MapTabView: View {
                                 .padding(6)
                                 .background(.background, in: RoundedRectangle(cornerRadius: 8))
                             case .labelCluster(let cluster):
-                                let sorted = cluster.records.sorted { $0.confidenceScore > $1.confidenceScore }
+                                let sorted = cluster.records.sorted { $0.trustScore > $1.trustScore }
                                 let top = sorted.first!
                                 Button {
                                     if sorted.count == 1 {
@@ -190,7 +227,7 @@ struct MapTabView: View {
                                             .font(.caption2)
                                             .lineLimit(1)
                                             .multilineTextAlignment(.center)
-                                        Text("\(sorted.count) events · top \(String(format: "%.0f%%", top.confidenceScore * 100))")
+                                        Text(top.voteCount == 0 ? "\(sorted.count) events · Unverified" : "\(sorted.count) events · score \(String(format: "%.1f", top.trustScore))")
                                             .font(.caption2)
                                             .foregroundStyle(.secondary)
                                     }
@@ -202,10 +239,16 @@ struct MapTabView: View {
                         }
                     }
                     .ignoresSafeArea(edges: .all)
-                    .onAppear { fitRegionToAnnotations() }
+                    .onAppear {
+                        fitRegionToAnnotations()
+                        loadTrustData()
+                    }
                     .onChange(of: mesh.senderCoordinates.count) { _ in fitRegionToAnnotations() }
                     .onChange(of: mesh.identity.shareLocation) { _ in fitRegionToAnnotations() }
-                    .onChange(of: mesh.mapLabels.count) { _ in fitRegionToAnnotations() }
+                    .onChange(of: mesh.mapLabels.count) { _ in
+                        fitRegionToAnnotations()
+                        loadTrustData()
+                    }
                 }
 
                 // Compass: direction the user is pointed (magnetic heading)
@@ -594,7 +637,10 @@ struct MapTabView: View {
 
     private func buildExportEvents() -> [MapExportEvent] {
         labelRecords.map { record in
-            MapExportEvent(
+            let votes = mesh.labelVotes[record.id] ?? [:]
+            let upVotes = votes.values.filter { $0 == 1 }.count
+            let downVotes = votes.values.filter { $0 == -1 }.count
+            return MapExportEvent(
                 id: record.id.uuidString,
                 category: record.category.rawValue,
                 latitude: record.latitude,
@@ -603,18 +649,18 @@ struct MapTabView: View {
                 eventDescription: record.customDescription,
                 icon: record.customSystemImage,
                 date: ISO8601DateFormatter().string(from: record.date),
-                upVotes: record.upVotes,
-                downVotes: record.downVotes
+                upVotes: upVotes,
+                downVotes: downVotes
             )
         }
     }
 
-    /// Color for event pin: redder = more valid votes (higher confidence score).
+    /// Color for event pin: normalized trustScore — higher = greener (more trusted).
     private func eventColor(for record: MapLabelRecord) -> Color {
-        let score = record.confidenceScore
-        // 0 → green, 0.5 → yellow/orange, 1 → red
-        let red = min(1, score * 2)
-        let green = min(1, (1 - score) * 2)
+        // Normalize: 10 = self-authored baseline. >10 = vouched. <0 = denied.
+        let normalized = max(0, min(1, record.trustScore / 10.0))
+        let red   = min(1, (1 - normalized) * 2)
+        let green = min(1, normalized * 2)
         return Color(red: red, green: green, blue: 0.2)
     }
 
@@ -950,40 +996,42 @@ private struct LabelVoteSheet: View {
                         .font(.caption)
                         .foregroundStyle(.tertiary)
                 }
-                Section("Confidence (votes)") {
+                Section("Trust Score") {
                     HStack {
                         Text("Score")
                         Spacer()
-                        Text(String(format: "%.0f%%", record.confidenceScore * 100))
-                            .fontWeight(.medium)
-                    }
-                    HStack {
-                        Text("↑ Valid")
-                        Spacer()
-                        Text("\(record.upVotes)")
-                    }
-                    HStack {
-                        Text("↓ Not valid")
-                        Spacer()
-                        Text("\(record.downVotes)")
+                        if record.voteCount == 0 {
+                            Text("Unverified")
+                                .fontWeight(.medium)
+                                .foregroundStyle(.orange)
+                        } else {
+                            Text(String(format: "%.1f", record.trustScore))
+                                .fontWeight(.medium)
+                        }
                     }
                 }
                 Section("Your vote") {
-                    HStack(spacing: 20) {
-                        Button {
-                            onVote(true)
-                        } label: {
-                            Label("Valid", systemImage: "hand.thumbsup.fill")
-                                .foregroundStyle(myVote == 1 ? .green : .secondary)
+                    if record.senderID == mesh.identity.deviceID {
+                        Text("You can't vote on your own post.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        HStack(spacing: 20) {
+                            Button {
+                                onVote(true)
+                            } label: {
+                                Label("Valid", systemImage: "hand.thumbsup.fill")
+                                    .foregroundStyle(myVote == 1 ? .green : .secondary)
+                            }
+                            .buttonStyle(.borderless)
+                            Button {
+                                onVote(false)
+                            } label: {
+                                Label("Not valid", systemImage: "hand.thumbsdown.fill")
+                                    .foregroundStyle(myVote == -1 ? .red : .secondary)
+                            }
+                            .buttonStyle(.borderless)
                         }
-                        .buttonStyle(.borderless)
-                        Button {
-                            onVote(false)
-                        } label: {
-                            Label("Not valid", systemImage: "hand.thumbsdown.fill")
-                                .foregroundStyle(myVote == -1 ? .red : .secondary)
-                        }
-                        .buttonStyle(.borderless)
                     }
                 }
             }
@@ -1010,7 +1058,7 @@ private struct LabelVoteSheet: View {
     }
 }
 
-/// Shows all labels in a cluster, ranked by confidence score.
+/// Shows all labels in a cluster, ranked by trust score.
 private struct ClusterListSheet: View {
     let cluster: LabelCluster
     let onSelectRecord: (MapLabelRecord) -> Void
@@ -1018,13 +1066,13 @@ private struct ClusterListSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     private var sortedRecords: [MapLabelRecord] {
-        cluster.records.sorted { $0.confidenceScore > $1.confidenceScore }
+        cluster.records.sorted { $0.trustScore > $1.trustScore }
     }
 
     private func rowColor(for record: MapLabelRecord) -> Color {
-        let score = record.confidenceScore
-        let red = min(1, score * 2)
-        let green = min(1, (1 - score) * 2)
+        let normalized = max(0, min(1, record.trustScore / 10.0))
+        let red   = min(1, (1 - normalized) * 2)
+        let green = min(1, normalized * 2)
         return Color(red: red, green: green, blue: 0.2)
     }
 
@@ -1055,7 +1103,7 @@ private struct ClusterListSheet: View {
                                             .font(.caption)
                                             .foregroundStyle(.secondary)
                                     }
-                                    Text("\(relativeTime(record.date)) · \(String(format: "%.0f%%", record.confidenceScore * 100))")
+                                    Text(record.voteCount == 0 ? "\(relativeTime(record.date)) · Unverified" : "\(relativeTime(record.date)) · score \(String(format: "%.1f", record.trustScore))")
                                         .font(.caption2)
                                         .foregroundStyle(.secondary)
                                 }

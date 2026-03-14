@@ -12,6 +12,9 @@ struct ContentView: View {
             MapTabView()
                 .tabItem { Label("Map", systemImage: "map") }
 
+            AlertFeedView()
+                .tabItem { Label("Alerts", systemImage: "exclamationmark.triangle") }
+
             DebugDashboardView()
                 .tabItem { Label("Dashboard", systemImage: "square.grid.2x2") }
 

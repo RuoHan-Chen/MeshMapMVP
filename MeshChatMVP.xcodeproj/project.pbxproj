@@ -39,6 +39,8 @@
 		A100002D /* ChatCrypto.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200002D /* ChatCrypto.swift */; };
 		A1000030 /* EventTypesConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000030 /* EventTypesConfig.swift */; };
 		D974FBAF2F651AD7008F4874 /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = D974FBAE2F651AD7008F4874 /* GRDB */; };
+		D9DC095B2F65869C000470FF /* AlertFeedView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9DC09592F65869C000470FF /* AlertFeedView.swift */; };
+		D9DC095C2F65869C000470FF /* AlertTrustEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9DC095A2F65869C000470FF /* AlertTrustEngine.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -74,6 +76,8 @@
 		A200002C /* PrivateChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrivateChatView.swift; sourceTree = "<group>"; };
 		A200002D /* ChatCrypto.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatCrypto.swift; sourceTree = "<group>"; };
 		A2000030 /* EventTypesConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventTypesConfig.swift; sourceTree = "<group>"; };
+		D9DC09592F65869C000470FF /* AlertFeedView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlertFeedView.swift; sourceTree = "<group>"; };
+		D9DC095A2F65869C000470FF /* AlertTrustEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlertTrustEngine.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -99,6 +103,8 @@
 		A4000001 /* MeshChatMVP */ = {
 			isa = PBXGroup;
 			children = (
+				D9DC09592F65869C000470FF /* AlertFeedView.swift */,
+				D9DC095A2F65869C000470FF /* AlertTrustEngine.swift */,
 				A2000001 /* MeshChatApp.swift */,
 				A2000002 /* ContentView.swift */,
 				A200000C /* ChatView.swift */,
@@ -115,6 +121,8 @@
 				A200000F /* MapLabelModels.swift */,
 				A2000010 /* ImageChunkPayload.swift */,
 				A2000011 /* MeshImageUtils.swift */,
+				D9DC09592F65869C000470FF /* AlertFeedView.swift */,
+				D9DC095A2F65869C000470FF /* AlertTrustEngine.swift */,
 				A2000030 /* EventTypesConfig.swift */,
 				A2000020 /* Contact.swift */,
 				A2000021 /* PersistedMessage.swift */,
@@ -234,6 +242,8 @@
 				A1000015 /* Contact.swift in Sources */,
 				A1000016 /* PersistedMessage.swift in Sources */,
 				A1000017 /* Alert.swift in Sources */,
+				D9DC095B2F65869C000470FF /* AlertFeedView.swift in Sources */,
+				D9DC095C2F65869C000470FF /* AlertTrustEngine.swift in Sources */,
 				A1000018 /* Vouch.swift in Sources */,
 				A1000019 /* NodeSighting.swift in Sources */,
 				A100001A /* AlertPayload.swift in Sources */,
