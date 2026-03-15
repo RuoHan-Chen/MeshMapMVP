@@ -223,26 +223,46 @@ private struct LabelEventClusterRow: View {
             } else {
                 HStack(spacing: 12) {
                     // Confirm Button
-                    Button { onVote(lead.id, true) } label: {
-                        Label("Confirm", systemImage: "hand.thumbsup.fill")
-                            .font(.caption)
-                            .frame(maxWidth: .infinity)
+                    if myVote == 1 {
+                        Button { onVote(lead.id, true) } label: {
+                            Label("Confirm", systemImage: "hand.thumbsup.fill")
+                                .font(.caption)
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(.green)
+                    } else {
+                        Button { onVote(lead.id, true) } label: {
+                            Label("Confirm", systemImage: "hand.thumbsup.fill")
+                                .font(.caption)
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.bordered)
+                        .tint(.green)
+                        .disabled(myVote == -1) // Disable if denied
+                        .opacity(myVote == -1 ? 0.5 : 1.0)
                     }
-                    .buttonStyle(myVote == 1 ? .borderedProminent : .bordered)
-                    .tint(.green)
-                    .disabled(myVote == -1) // Disable if denied
-                    .opacity(myVote == -1 ? 0.5 : 1.0)
 
                     // Deny Button
-                    Button { onVote(lead.id, false) } label: {
-                        Label("Deny", systemImage: "hand.thumbsdown.fill")
-                            .font(.caption)
-                            .frame(maxWidth: .infinity)
+                    if myVote == -1 {
+                        Button { onVote(lead.id, false) } label: {
+                            Label("Deny", systemImage: "hand.thumbsdown.fill")
+                                .font(.caption)
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(.red)
+                    } else {
+                        Button { onVote(lead.id, false) } label: {
+                            Label("Deny", systemImage: "hand.thumbsdown.fill")
+                                .font(.caption)
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.bordered)
+                        .tint(.red)
+                        .disabled(myVote == 1) // Disable if confirmed
+                        .opacity(myVote == 1 ? 0.5 : 1.0)
                     }
-                    .buttonStyle(myVote == -1 ? .borderedProminent : .bordered)
-                    .tint(.red)
-                    .disabled(myVote == 1) // Disable if confirmed
-                    .opacity(myVote == 1 ? 0.5 : 1.0)
                 }
             }
         }
