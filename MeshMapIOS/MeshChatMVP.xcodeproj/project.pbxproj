@@ -42,6 +42,7 @@
 		D974FBAF2F651AD7008F4874 /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = D974FBAE2F651AD7008F4874 /* GRDB */; };
 		D9DC095B2F65869C000470FF /* AlertFeedView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9DC09592F65869C000470FF /* AlertFeedView.swift */; };
 		D9DC095C2F65869C000470FF /* AlertTrustEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9DC095A2F65869C000470FF /* AlertTrustEngine.swift */; };
+		A1000035 /* SpeechManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000035 /* SpeechManager.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -80,6 +81,7 @@
 		A2000034 /* MeshNewsPublish.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeshNewsPublish.swift; sourceTree = "<group>"; };
 		D9DC09592F65869C000470FF /* AlertFeedView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlertFeedView.swift; sourceTree = "<group>"; };
 		D9DC095A2F65869C000470FF /* AlertTrustEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlertTrustEngine.swift; sourceTree = "<group>"; };
+		A2000035 /* SpeechManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeechManager.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -105,42 +107,99 @@
 		A4000001 /* MeshChatMVP */ = {
 			isa = PBXGroup;
 			children = (
+				A4000010 /* App */,
+				A4000011 /* Views */,
+				A4000012 /* Models */,
+				A4000013 /* Payloads */,
+				A4000014 /* Services */,
+				A4000015 /* Utilities */,
+				A4000016 /* Resources */,
+			);
+			path = MeshChatMVP;
+			sourceTree = "<group>";
+		};
+		A4000010 /* App */ = {
+			isa = PBXGroup;
+			children = (
 				A2000001 /* MeshChatApp.swift */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		A4000011 /* Views */ = {
+			isa = PBXGroup;
+			children = (
 				A2000002 /* ContentView.swift */,
 				A200000C /* ChatView.swift */,
 				A200000E /* MapTabView.swift */,
-				A2000003 /* BluetoothMeshService.swift */,
-				A2000004 /* MeshEnvelope.swift */,
-				A2000005 /* MessageType.swift */,
-				A2000006 /* DeviceIdentity.swift */,
-				A2000007 /* ChatPayload.swift */,
-				A200002D /* ChatCrypto.swift */,
-				A2000008 /* AnnouncementPayload.swift */,
-				A2000009 /* ChatMessage.swift */,
-				A200000F /* MapLabelModels.swift */,
-				A2000010 /* ImageChunkPayload.swift */,
-				A2000011 /* MeshImageUtils.swift */,
 				D9DC09592F65869C000470FF /* AlertFeedView.swift */,
-				D9DC095A2F65869C000470FF /* AlertTrustEngine.swift */,
-				A2000030 /* EventTypesConfig.swift */,
-				A2000033 /* WiFiMonitor.swift */,
-				A2000034 /* MeshNewsPublish.swift */,
-				A2000020 /* Contact.swift */,
-				A2000021 /* PersistedMessage.swift */,
-				A2000022 /* Alert.swift */,
-				A2000023 /* Vouch.swift */,
-				A2000024 /* NodeSighting.swift */,
-				A2000025 /* AlertPayload.swift */,
-				A2000026 /* VouchPayload.swift */,
-				A2000027 /* DatabaseManager.swift */,
-				A2000028 /* KeyManager.swift */,
-				A2000029 /* SavedContact.swift */,
-				A200002A /* ContactEditorView.swift */,
 				A200002B /* ContactsListView.swift */,
 				A200002C /* PrivateChatView.swift */,
+				A200002A /* ContactEditorView.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		A4000012 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				A2000020 /* Contact.swift */,
+				A2000029 /* SavedContact.swift */,
+				A2000009 /* ChatMessage.swift */,
+				A2000021 /* PersistedMessage.swift */,
+				A2000022 /* Alert.swift */,
+				A2000006 /* DeviceIdentity.swift */,
+				A2000024 /* NodeSighting.swift */,
+				A2000023 /* Vouch.swift */,
+				A200000F /* MapLabelModels.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		A4000013 /* Payloads */ = {
+			isa = PBXGroup;
+			children = (
+				A2000004 /* MeshEnvelope.swift */,
+				A2000005 /* MessageType.swift */,
+				A2000007 /* ChatPayload.swift */,
+				A2000008 /* AnnouncementPayload.swift */,
+				A2000025 /* AlertPayload.swift */,
+				A2000026 /* VouchPayload.swift */,
+				A2000010 /* ImageChunkPayload.swift */,
+			);
+			path = Payloads;
+			sourceTree = "<group>";
+		};
+		A4000014 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				A2000003 /* BluetoothMeshService.swift */,
+				A2000027 /* DatabaseManager.swift */,
+				A2000028 /* KeyManager.swift */,
+				A200002D /* ChatCrypto.swift */,
+				A2000033 /* WiFiMonitor.swift */,
+				A2000034 /* MeshNewsPublish.swift */,
+				A2000035 /* SpeechManager.swift */,
+				D9DC095A2F65869C000470FF /* AlertTrustEngine.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+		A4000015 /* Utilities */ = {
+			isa = PBXGroup;
+			children = (
+				A2000011 /* MeshImageUtils.swift */,
+				A2000030 /* EventTypesConfig.swift */,
+			);
+			path = Utilities;
+			sourceTree = "<group>";
+		};
+		A4000016 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
 				A200000A /* Assets.xcassets */,
 			);
-			path = MeshChatMVP;
+			path = Resources;
 			sourceTree = "<group>";
 		};
 		A4000002 /* Products */ = {
@@ -241,6 +300,7 @@
 				A1000030 /* EventTypesConfig.swift in Sources */,
 				A1000033 /* WiFiMonitor.swift in Sources */,
 				A1000034 /* MeshNewsPublish.swift in Sources */,
+				A1000035 /* SpeechManager.swift in Sources */,
 				A1000015 /* Contact.swift in Sources */,
 				A1000016 /* PersistedMessage.swift in Sources */,
 				A1000017 /* Alert.swift in Sources */,

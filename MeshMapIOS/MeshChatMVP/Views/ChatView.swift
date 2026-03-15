@@ -4,6 +4,8 @@ import PhotosUI
 /// Group chat (quick links, unread, last line).
 struct ChatView: View {
     @EnvironmentObject var mesh: BluetoothMeshService
+    @AppStorage("accessibilityMode") private var accessibilityMode = false
+    @AppStorage("accessibilityLargeText") private var accessibilityLargeText = true
     @State private var draft = ""
     @FocusState private var messageFocused: Bool
     @State private var sendCooldown = false
@@ -27,8 +29,8 @@ struct ChatView: View {
                 Divider()
                 HStack {
                     Text("Group chat")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
+                        .font(accessibilityMode && accessibilityLargeText ? .body.weight(.semibold) : .caption.weight(.semibold))
+                        .foregroundStyle(accessibilityMode ? .primary : .secondary)
                     Spacer()
                 }
                 .padding(.horizontal)
@@ -56,14 +58,18 @@ struct ChatView: View {
                 HStack(alignment: .bottom, spacing: 10) {
                     PhotosPicker(selection: $pickedItem, matching: .images, photoLibrary: .shared()) {
                         Image(systemName: "photo.on.rectangle.angled")
-                            .font(.title2)
+                            .font(accessibilityMode ? .title : .title2)
                             .foregroundColor(imageBusy ? .secondary : .accentColor)
+                            .frame(minWidth: accessibilityMode ? 44 : nil, minHeight: accessibilityMode ? 44 : nil)
                     }
                     .disabled(imageBusy || sendCooldown)
+                    .accessibilityLabel("Add photo")
+                    .accessibilityHint("Tap to attach an image")
                     TextField("Message", text: $draft, axis: .vertical)
                         .textFieldStyle(.roundedBorder)
                         .lineLimit(1...4)
                         .focused($messageFocused)
+                        .font(accessibilityMode && accessibilityLargeText ? .body : nil)
                     Button {
                         let t = draft.trimmingCharacters(in: .whitespacesAndNewlines)
                         guard !t.isEmpty, !sendCooldown else { return }
@@ -76,9 +82,12 @@ struct ChatView: View {
                         }
                     } label: {
                         Image(systemName: "arrow.up.circle.fill")
-                            .font(.title2)
+                            .font(accessibilityMode ? .title : .title2)
+                            .frame(minWidth: 44, minHeight: 44)
                     }
                     .disabled(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || sendCooldown)
+                    .accessibilityLabel("Send message")
+                    .accessibilityHint("Sends your message to the group chat")
                 }
                 .padding()
             }
@@ -189,24 +198,24 @@ struct ChatView: View {
                     systemImage: mesh.readyRemoteCount > 0 || mesh.subscribedCentralCount > 0
                         ? "link.circle.fill" : "antenna.radiowaves.left.and.right"
                 )
-                .font(.subheadline.weight(.medium))
+                .font(accessibilityMode && accessibilityLargeText ? .body.weight(.medium) : .subheadline.weight(.medium))
                 .foregroundStyle(
-                    mesh.readyRemoteCount > 0 || mesh.subscribedCentralCount > 0 ? Color.green : Color.secondary
+                    mesh.readyRemoteCount > 0 || mesh.subscribedCentralCount > 0 ? Color.green : (accessibilityMode ? Color.primary : Color.secondary)
                 )
                 Spacer()
                 if mesh.isScanning {
                     Text("Scanning")
-                        .font(.caption2)
+                        .font(accessibilityMode && accessibilityLargeText ? .caption : .caption2)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
                         .background(Capsule().fill(Color.green.opacity(0.2)))
                 } else if mesh.secondsUntilNextScan > 0 {
                     Text("Next scan \(Int(mesh.secondsUntilNextScan))s")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
+                        .font(accessibilityMode && accessibilityLargeText ? .caption : .caption2)
+                        .foregroundStyle(accessibilityMode ? .primary : .secondary)
                 }
             }
-            
+
             // Dropdown menu for connected peers
             Menu {
                 if mesh.connectedPeerNames.isEmpty {
@@ -221,8 +230,9 @@ struct ChatView: View {
                     Text(mesh.connectedPeerNames.isEmpty ? "No connections" : "Connected to \(mesh.connectedPeerNames.count) peers")
                     Image(systemName: "chevron.down")
                 }
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                .font(accessibilityMode && accessibilityLargeText ? .body : .caption)
+                .foregroundStyle(accessibilityMode ? .primary : .secondary)
+                .frame(minHeight: accessibilityMode ? 44 : nil)
             }
         }
         .padding(.horizontal)
@@ -263,8 +273,11 @@ struct ChatView: View {
                         }
                     } label: {
                         bubbleContent(m, trailingIcon: isSavedContact ? "lock.open.fill" : "person.crop.circle.badge.plus")
+                            .frame(minHeight: accessibilityMode ? 44 : nil)
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel("Message from \(mesh.senderDisplayName(senderID: m.senderID, fallbackSenderName: m.senderName))")
+                    .accessibilityHint(isSavedContact ? "Tap to open private chat" : "Tap to add contact")
                 } else {
                     bubbleContent(m, trailingIcon: nil)
                 }
@@ -274,22 +287,24 @@ struct ChatView: View {
     }
 
     private func bubbleContent(_ m: ChatMessage, trailingIcon: String?) -> some View {
-        VStack(alignment: m.isLocal ? .trailing : .leading, spacing: 4) {
+        let bodyFont: Font = accessibilityMode && accessibilityLargeText ? .title3 : .body
+        let captionFont: Font = accessibilityMode && accessibilityLargeText ? .subheadline : .caption
+        return VStack(alignment: m.isLocal ? .trailing : .leading, spacing: 4) {
             HStack(spacing: 6) {
                 if !m.isLocal {
                     Text(mesh.senderDisplayName(senderID: m.senderID, fallbackSenderName: m.senderName))
-                        .font(.caption.weight(.semibold))
+                        .font(captionFont.weight(.semibold))
                     if let trailingIcon {
                         Image(systemName: trailingIcon)
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
+                            .font(accessibilityMode ? .caption : .caption2)
+                            .foregroundStyle(accessibilityMode ? .primary : .secondary)
                     }
                 }
-                Text(m.date, style: .time).font(.caption2).foregroundStyle(.secondary)
-                if m.isLocal { Text("You").font(.caption.weight(.semibold)) }
+                Text(m.date, style: .time).font(captionFont).foregroundStyle(accessibilityMode ? .primary : .secondary)
+                if m.isLocal { Text("You").font(captionFont.weight(.semibold)) }
             }
             if !m.isLocal, let dist = m.distanceFromMe {
-                Text(distanceString(dist)).font(.caption2).foregroundStyle(.secondary)
+                Text(distanceString(dist)).font(captionFont).foregroundStyle(accessibilityMode ? .primary : .secondary)
             }
             Group {
                 if let b64 = m.imageJPEGBase64, let imgData = Data(base64Encoded: b64), let ui = UIImage(data: imgData) {
@@ -300,7 +315,7 @@ struct ChatView: View {
                         .clipShape(RoundedRectangle(cornerRadius: 12))
                 } else {
                     Text(m.text)
-                        .font(.body)
+                        .font(bodyFont)
                 }
             }
             .padding(12)

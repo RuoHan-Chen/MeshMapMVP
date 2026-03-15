@@ -2,6 +2,8 @@ import SwiftUI
 
 struct ContactsListView: View {
     @EnvironmentObject var mesh: BluetoothMeshService
+    @AppStorage("accessibilityMode") private var accessibilityMode = false
+    @AppStorage("accessibilityLargeText") private var accessibilityLargeText = true
     @State private var contacts: [SavedContact] = []
     @State private var loadError: String?
     @State private var editingContact: SavedContact?
@@ -11,19 +13,19 @@ struct ContactsListView: View {
             Group {
                 if let err = loadError {
                     Text(err)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .font(accessibilityMode && accessibilityLargeText ? .body : .caption)
+                        .foregroundStyle(accessibilityMode ? .primary : .secondary)
                         .padding()
                 } else if contacts.isEmpty {
                     VStack(spacing: 12) {
                         Image(systemName: "person.crop.circle.badge.plus")
-                            .font(.largeTitle)
-                            .foregroundStyle(.secondary)
+                            .font(accessibilityMode ? .title : .largeTitle)
+                            .foregroundStyle(accessibilityMode ? .primary : .secondary)
                         Text("No contacts yet")
-                            .font(.headline)
+                            .font(accessibilityMode && accessibilityLargeText ? .title2 : .headline)
                         Text("Dashboard or group chat → add contact, then open private chat here.")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
+                            .font(accessibilityMode && accessibilityLargeText ? .body : .subheadline)
+                            .foregroundStyle(accessibilityMode ? .primary : .secondary)
                             .multilineTextAlignment(.center)
                             .padding(.horizontal)
                     }
@@ -41,7 +43,7 @@ struct ContactsListView: View {
                                     VStack(alignment: .leading, spacing: 4) {
                                         HStack(spacing: 8) {
                                             Text(c.nickname)
-                                                .font(.headline)
+                                                .font(accessibilityMode && accessibilityLargeText ? .title3 : .headline)
                                             if let u = act?.unread, u > 0 {
                                                 Text(u > 99 ? "99+" : "\(u)")
                                                     .font(.caption2.weight(.bold))
@@ -52,17 +54,20 @@ struct ContactsListView: View {
                                             }
                                         }
                                         Text(act?.lastText.isEmpty == false ? act!.lastText : "No messages yet")
-                                            .font(.subheadline)
-                                            .foregroundStyle(.secondary)
+                                            .font(accessibilityMode && accessibilityLargeText ? .body : .subheadline)
+                                            .foregroundStyle(accessibilityMode ? .primary : .secondary)
                                             .lineLimit(2)
                                         Text("\(KeyManager.fingerprint(c.publicKey, length: 8)) · \(c.relationship)")
-                                            .font(.caption2)
-                                            .foregroundStyle(.tertiary)
+                                            .font(accessibilityMode && accessibilityLargeText ? .caption : .caption2)
+                                            .foregroundStyle(accessibilityMode ? .primary : .tertiary)
                                     }
                                     Spacer(minLength: 0)
                                 }
-                                .padding(.vertical, 4)
+                                .padding(.vertical, accessibilityMode ? 8 : 4)
+                                .frame(minHeight: accessibilityMode ? 44 : nil)
                             }
+                            .accessibilityLabel("Contact \(c.nickname)")
+                            .accessibilityHint("Tap to open private chat")
                             .swipeActions(edge: .leading, allowsFullSwipe: false) {
                                 Button {
                                     editingContact = c

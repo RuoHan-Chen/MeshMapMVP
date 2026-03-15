@@ -21,12 +21,41 @@ Or open **`MeshChatMVP.xcodeproj`** in Xcode → Run on **two physical devices**
 2. Wait for link / announce so each learns the other’s **encryption** key.
 3. Add/save contact if your UI requires it; open **private chat** and send — payload on the wire is **ciphertext** when encrypted.
 
+## Project structure
+
+```
+MeshChatMVP/
+├── App/              # App entry point
+│   └── MeshChatApp.swift
+├── Views/            # SwiftUI screens and view hierarchy
+│   ├── ContentView.swift, ChatView.swift, MapTabView.swift
+│   ├── AlertFeedView.swift, ContactsListView.swift
+│   ├── PrivateChatView.swift, ContactEditorView.swift
+├── Models/           # Domain and data models
+│   ├── Contact.swift, SavedContact.swift, ChatMessage.swift
+│   ├── PersistedMessage.swift, Alert.swift, DeviceIdentity.swift
+│   ├── NodeSighting.swift, Vouch.swift, MapLabelModels.swift
+├── Payloads/         # Wire / mesh envelope types
+│   ├── MeshEnvelope.swift, MessageType.swift
+│   ├── ChatPayload.swift, AnnouncementPayload.swift
+│   ├── AlertPayload.swift, VouchPayload.swift, ImageChunkPayload.swift
+├── Services/         # Business logic, mesh, crypto, persistence
+│   ├── BluetoothMeshService.swift, DatabaseManager.swift
+│   ├── KeyManager.swift, ChatCrypto.swift
+│   ├── WiFiMonitor.swift, MeshNewsPublish.swift
+│   ├── SpeechManager.swift, AlertTrustEngine.swift
+├── Utilities/        # Helpers and config
+│   ├── MeshImageUtils.swift, EventTypesConfig.swift
+└── Resources/       # Assets
+    └── Assets.xcassets
+```
+
 ## Main files
 
 | File | Role |
 |------|------|
-| `MeshChatMVP/BluetoothMeshService.swift` | BLE mesh, relay, DM send/receive |
-| `MeshChatMVP/ChatCrypto.swift` | AES-GCM + X25519 DM crypto |
-| `MeshChatMVP/KeyManager.swift` | Signing + encryption keypairs (Keychain) |
-| `MeshChatMVP/AnnouncementPayload.swift` | Nickname + signing key + **encryption** key |
-| `MeshChatMVP/ChatPayload.swift` | DM JSON (`encrypted` + `ciphertextB64` or `text`) |
+| `Services/BluetoothMeshService.swift` | BLE mesh, relay, DM send/receive |
+| `Services/ChatCrypto.swift` | AES-GCM + X25519 DM crypto |
+| `Services/KeyManager.swift` | Signing + encryption keypairs (Keychain) |
+| `Payloads/AnnouncementPayload.swift` | Nickname + signing key + **encryption** key |
+| `Payloads/ChatPayload.swift` | DM JSON (`encrypted` + `ciphertextB64` or `text`) |

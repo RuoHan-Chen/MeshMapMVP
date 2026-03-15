@@ -8,9 +8,13 @@ struct AlertFeedView: View {
     @EnvironmentObject var mesh: BluetoothMeshService
     @Binding var selectedTab: Int
     @Binding var mapRegion: MKCoordinateRegion
+    @AppStorage("accessibilityMode") private var accessibilityMode = false
+    @AppStorage("accessibilitySpeakAlerts") private var accessibilitySpeakAlerts = true
+    @AppStorage("accessibilityLargeText") private var accessibilityLargeText = true
 
     @State private var clusters: [LabelEventCluster] = []
     @State private var myVotes:  [UUID: Int]         = [:]
+    @State private var lastSpokenClusterIds: Set<UUID> = []
 
     private let timer = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
 
@@ -22,6 +26,8 @@ struct AlertFeedView: View {
                         cluster:    cluster,
                         myVotes:    myVotes,
                         myDeviceID: mesh.identity.deviceID,
+                        accessibilityMode: accessibilityMode,
+                        accessibilityLargeText: accessibilityLargeText,
                         onVote: { labelID, confirms in
                             mesh.voteForLabel(labelId: labelID, up: confirms)
                             myVotes[labelID] = confirms ? 1 : -1
@@ -40,13 +46,13 @@ struct AlertFeedView: View {
                 if clusters.isEmpty {
                     VStack(spacing: 12) {
                         Image(systemName: "bell.slash")
-                            .font(.largeTitle)
-                            .foregroundStyle(.secondary)
+                            .font(accessibilityMode && accessibilityLargeText ? .title : .largeTitle)
+                            .foregroundStyle(accessibilityMode ? .primary : .secondary)
                         Text("No Active Alerts")
-                            .font(.headline)
+                            .font(accessibilityMode && accessibilityLargeText ? .title2 : .headline)
                         Text("Alerts from the mesh will appear here.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .font(accessibilityMode && accessibilityLargeText ? .body : .caption)
+                            .foregroundStyle(accessibilityMode ? .primary : .secondary)
                     }
                 }
             }
@@ -72,6 +78,24 @@ struct AlertFeedView: View {
             DispatchQueue.main.async {
                 clusters = newClusters
                 myVotes  = newMyVotes
+                if accessibilityMode && accessibilitySpeakAlerts {
+                    for cluster in newClusters {
+                        let id = cluster.leadScoredLabel.payload.id
+                        guard !lastSpokenClusterIds.contains(id) else { continue }
+                        let cat = LabelCategory(rawValue: cluster.leadScoredLabel.payload.category) ?? .other
+                        let isCritical = (cat == .emergency || cat == .hazard || cat == .armedConflict || cat == .explosion || cat == .drone)
+                        if isCritical {
+                            let name = cluster.leadScoredLabel.payload.customLabelName.flatMap { $0.isEmpty ? nil : $0 }
+                                ?? cat.displayName
+                            let desc = cluster.leadScoredLabel.payload.customDescription ?? ""
+                            let msg = desc.isEmpty
+                                ? "Emergency alert nearby. \(name) reported."
+                                : "Emergency alert nearby. \(name). \(desc)"
+                            SpeechManager.shared.speak(msg)
+                            lastSpokenClusterIds.insert(id)
+                        }
+                    }
+                }
             }
         }
     }
@@ -140,6 +164,8 @@ private struct LabelEventClusterRow: View {
     let cluster:    LabelEventCluster
     let myVotes:    [UUID: Int]
     let myDeviceID: String
+    let accessibilityMode: Bool
+    let accessibilityLargeText: Bool
     let onVote:     (UUID, Bool) -> Void
     let onNavigate: (Double, Double) -> Void
 
@@ -166,37 +192,41 @@ private struct LabelEventClusterRow: View {
         return "\(Int(age / 3600))h ago"
     }
 
+    private var bodyFont: Font { accessibilityMode && accessibilityLargeText ? .title3 : .body }
+    private var captionFont: Font { accessibilityMode && accessibilityLargeText ? .body : .caption }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: accessibilityMode ? 12 : 8) {
             // Tappable content area for navigation
             Button {
                 onNavigate(lead.lat, lead.lon)
             } label: {
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: accessibilityMode ? 12 : 8) {
                     HStack(alignment: .top) {
                         Image(systemName: category.systemImage)
+                            .font(accessibilityMode ? .title2 : .body)
                             .foregroundStyle(pinColor)
                         Text(displayName)
-                            .font(.body)
+                            .font(bodyFont)
                             .foregroundStyle(.primary)
                             .lineLimit(2)
                             .multilineTextAlignment(.leading)
                         Spacer()
                         if isUnverified {
                             Text("Unverified")
-                                .font(.caption.bold())
+                                .font(captionFont.bold())
                                 .foregroundStyle(.orange)
                         } else {
                             Text(String(format: "%.1f", cluster.clusterScore))
-                                .font(.caption.monospacedDigit())
-                                .foregroundStyle(.secondary)
+                                .font(captionFont.monospacedDigit())
+                                .foregroundStyle(accessibilityMode ? .primary : .secondary)
                         }
                     }
 
                     if let desc = lead.customDescription, !desc.isEmpty {
                         Text(desc)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .font(captionFont)
+                            .foregroundStyle(accessibilityMode ? .primary : .secondary)
                             .lineLimit(2)
                             .multilineTextAlignment(.leading)
                     }
@@ -204,68 +234,74 @@ private struct LabelEventClusterRow: View {
                     HStack(spacing: 4) {
                         if cluster.labels.count > 1 {
                             Text("\(cluster.labels.count) reports")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+                                .font(captionFont)
+                                .foregroundStyle(accessibilityMode ? .primary : .secondary)
                         }
                         Spacer()
                         Text(timeAgo)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .font(captionFont)
+                            .foregroundStyle(accessibilityMode ? .primary : .secondary)
                     }
                 }
+                .frame(minHeight: accessibilityMode ? 44 : nil)
+                .padding(.vertical, accessibilityMode ? 8 : 0)
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("Emergency alert: \(displayName)")
+            .accessibilityHint("Tap to view details and location on map")
 
             if isOwn {
                 Text("Your post")
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
+                    .font(captionFont)
+                    .foregroundStyle(accessibilityMode ? .primary : .tertiary)
             } else {
                 HStack(spacing: 12) {
-                    // Confirm Button
                     if myVote == 1 {
                         Button { onVote(lead.id, true) } label: {
                             Label("Confirm", systemImage: "hand.thumbsup.fill")
-                                .font(.caption)
+                                .font(captionFont)
                                 .frame(maxWidth: .infinity)
+                                .frame(minHeight: 44)
                         }
                         .buttonStyle(.borderedProminent)
                         .tint(.green)
                     } else {
                         Button { onVote(lead.id, true) } label: {
                             Label("Confirm", systemImage: "hand.thumbsup.fill")
-                                .font(.caption)
+                                .font(captionFont)
                                 .frame(maxWidth: .infinity)
+                                .frame(minHeight: 44)
                         }
                         .buttonStyle(.bordered)
                         .tint(.green)
-                        .disabled(myVote == -1) // Disable if denied
+                        .disabled(myVote == -1)
                         .opacity(myVote == -1 ? 0.5 : 1.0)
                     }
 
-                    // Deny Button
                     if myVote == -1 {
                         Button { onVote(lead.id, false) } label: {
                             Label("Deny", systemImage: "hand.thumbsdown.fill")
-                                .font(.caption)
+                                .font(captionFont)
                                 .frame(maxWidth: .infinity)
+                                .frame(minHeight: 44)
                         }
                         .buttonStyle(.borderedProminent)
                         .tint(.red)
                     } else {
                         Button { onVote(lead.id, false) } label: {
                             Label("Deny", systemImage: "hand.thumbsdown.fill")
-                                .font(.caption)
+                                .font(captionFont)
                                 .frame(maxWidth: .infinity)
+                                .frame(minHeight: 44)
                         }
                         .buttonStyle(.bordered)
                         .tint(.red)
-                        .disabled(myVote == 1) // Disable if confirmed
+                        .disabled(myVote == 1)
                         .opacity(myVote == 1 ? 0.5 : 1.0)
                     }
                 }
             }
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, accessibilityMode ? 8 : 4)
     }
 }

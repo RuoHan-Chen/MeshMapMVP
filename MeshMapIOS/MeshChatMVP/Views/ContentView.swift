@@ -5,7 +5,10 @@ import MapKit
 struct ContentView: View {
     @EnvironmentObject var mesh: BluetoothMeshService
     @State private var nicknameEditor = ""
-    
+    @AppStorage("accessibilityMode") private var accessibilityMode = false
+    @AppStorage("accessibilitySpeakAlerts") private var accessibilitySpeakAlerts = true
+    @AppStorage("accessibilityLargeText") private var accessibilityLargeText = true
+
     // Lifted map state so Settings can access it (e.g. for offline caching)
     @State private var mapRegion = MKCoordinateRegion(
         center: CLLocationCoordinate2D(latitude: -33.8688, longitude: 151.2093),
@@ -14,7 +17,7 @@ struct ContentView: View {
     @State private var isCachingMap = false
     @State private var selectedTab: Int = 2 // Default to Alerts for testing or 0? User didn't specify. Let's stick to 0 or whatever default.
     // Actually, usually 0 (Chat).
-    
+
     var body: some View {
         TabView(selection: $selectedTab) {
             ChatView()
@@ -38,9 +41,15 @@ struct ContentView: View {
                 .tabItem { Label("Account", systemImage: "person.circle") }
                 .tag(4)
         }
+        .dynamicTypeSize(accessibilityMode && accessibilityLargeText ? .large ... .accessibility5 : .xSmall ... .xxxLarge)
         .onAppear {
             nicknameEditor = mesh.identity.nickname
             mesh.syncScanTimingFromUI()
+        }
+        .onChange(of: mesh.pendingSOSAlert?.labelId.uuidString ?? "") { newId in
+            if !newId.isEmpty, let sos = mesh.pendingSOSAlert, accessibilityMode, accessibilitySpeakAlerts {
+                SpeechManager.shared.speak("Emergency alert nearby. Assistance requested from \(sos.senderName). Tap View on Map to see location.")
+            }
         }
         .alert("SOS / Emergency", isPresented: Binding(
             get: { mesh.pendingSOSAlert != nil },
@@ -54,17 +63,21 @@ struct ContentView: View {
                 }
                 mesh.pendingSOSAlert = nil
             }
+            .accessibilityHint("Opens map at emergency location")
             Button("Dismiss", role: .cancel) {
                 mesh.pendingSOSAlert = nil
             }
         } message: {
             Text("Emergency assistance requested from \(mesh.pendingSOSAlert?.senderName ?? "someone"). Tap View to see on map.")
         }
+        .accessibilityLabel("Emergency alert")
     }
 }
 
 private struct ProfileView: View {
     @EnvironmentObject var mesh: BluetoothMeshService
+    @AppStorage("accessibilityMode") private var accessibilityMode = false
+    @AppStorage("accessibilityLargeText") private var accessibilityLargeText = true
     @StateObject private var wifiMonitor = WiFiMonitor()
     @State private var nicknameEditor = ""
     @Binding var mapRegion: MKCoordinateRegion
@@ -79,24 +92,28 @@ private struct ProfileView: View {
                 if wifiMonitor.isOnWifi {
                     Section {
                         Text("Upload current map labels and photos to MeshNews so they can appear as local stories.")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
+                            .font(accessibilityMode && accessibilityLargeText ? .body : .subheadline)
+                            .foregroundStyle(accessibilityMode ? .primary : .secondary)
                         Button {
                             Task { await publishToMeshNews() }
                         } label: {
                             HStack {
                                 Label("Upload and publish map data", systemImage: "square.and.arrow.up")
+                                    .font(accessibilityMode && accessibilityLargeText ? .body : nil)
                                 if publishInProgress {
                                     Spacer()
                                     ProgressView()
                                 }
                             }
+                            .frame(minHeight: accessibilityMode ? 44 : nil)
                         }
                         .disabled(publishInProgress)
+                        .accessibilityLabel("Upload and publish map data")
+                        .accessibilityHint("Publishes map labels and photos to MeshNews")
                         if let msg = publishMessage {
                             Text(msg)
-                                .font(.caption)
-                                .foregroundStyle(publishSuccess ? Color.secondary : Color.red)
+                                .font(accessibilityMode && accessibilityLargeText ? .body : .caption)
+                                .foregroundStyle(publishSuccess ? (accessibilityMode ? Color.primary : Color.secondary) : Color.red)
                         }
                     } header: {
                         Text("Publish to MeshNews")
@@ -104,19 +121,24 @@ private struct ProfileView: View {
                 }
                 Section("Identity") {
                     TextField("Nickname", text: $nicknameEditor)
+                        .font(accessibilityMode && accessibilityLargeText ? .body : nil)
                     Button("Save nickname") {
                         var id = mesh.identity
                         id.nickname = nicknameEditor.isEmpty ? id.nickname : nicknameEditor
                         mesh.updateIdentity(id)
                     }
+                    .font(accessibilityMode && accessibilityLargeText ? .body : nil)
+                    .frame(minHeight: accessibilityMode ? 44 : nil)
+                    .accessibilityLabel("Save nickname")
+                    .accessibilityHint("Saves your display name on the mesh")
                     LabeledContent("Public key (mesh id)") {
                         VStack(alignment: .leading, spacing: 4) {
                             Text(KeyManager.fingerprint(KeyManager.publicKeyData, length: 12))
-                                .font(.caption.monospaced())
+                                .font(accessibilityMode && accessibilityLargeText ? .subheadline.monospaced() : .caption.monospaced())
                             Text(mesh.identity.deviceID)
-                                .font(.caption2)
+                                .font(accessibilityMode && accessibilityLargeText ? .caption : .caption2)
                                 .textSelection(.enabled)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(accessibilityMode ? .primary : .secondary)
                         }
                     }
                 }
@@ -130,20 +152,23 @@ private struct ProfileView: View {
                         }
                     ))
                     Text("When on, your coordinates are included in messages so others can see approximate distance. You can turn this off anytime.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .font(accessibilityMode && accessibilityLargeText ? .body : .caption)
+                        .foregroundStyle(accessibilityMode ? .primary : .secondary)
                 }
-                
+
                 Section {
                     NavigationLink("Settings") {
                         SettingsView(mapRegion: $mapRegion, isCachingMap: $isCachingMap)
                     }
+                    .frame(minHeight: accessibilityMode ? 44 : nil)
+                    .accessibilityLabel("Settings")
+                    .accessibilityHint("Tap to open accessibility and data settings")
                 }
-                
+
                 Section("Tips") {
                     Text("Open Chat on both phones. Dashboard shows scan windows and auto-connect. Keep apps in foreground for best results.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .font(accessibilityMode && accessibilityLargeText ? .body : .caption)
+                        .foregroundStyle(accessibilityMode ? .primary : .secondary)
                 }
             }
             .navigationTitle("Account")
@@ -174,28 +199,50 @@ private struct SettingsView: View {
     @Binding var mapRegion: MKCoordinateRegion
     @Binding var isCachingMap: Bool
     @State private var showOfflineSheet = false
-    
+    @AppStorage("accessibilityMode") private var accessibilityMode = false
+    @AppStorage("accessibilitySpeakAlerts") private var accessibilitySpeakAlerts = true
+    @AppStorage("accessibilityLargeText") private var accessibilityLargeText = true
+
     var body: some View {
         Form {
+            Section {
+                Toggle("Accessibility Mode", isOn: $accessibilityMode)
+                if accessibilityMode {
+                    Toggle("Speak Alerts", isOn: $accessibilitySpeakAlerts)
+                    Toggle("Large Text", isOn: $accessibilityLargeText)
+                }
+            } header: {
+                Text("Accessibility")
+            } footer: {
+                Text("When on: larger text and buttons, high contrast, and optional spoken alerts for emergencies. Works fully offline.")
+            }
+
             Section("Data & Storage") {
                 Button("Offline Maps") {
                     showOfflineSheet = true
                 }
+                .frame(minHeight: accessibilityMode ? 44 : nil)
+                .accessibilityLabel("Offline Maps")
+                .accessibilityHint("Tap to cache map areas for offline use")
                 Button("Clear chat messages", role: .destructive) {
                     mesh.clearChatMessages()
                 }
+                .frame(minHeight: accessibilityMode ? 44 : nil)
                 Button("Clear map events", role: .destructive) {
                     mesh.clearLocalEvents()
                 }
+                .frame(minHeight: accessibilityMode ? 44 : nil)
                 Button("Clear log", role: .destructive) {
                     mesh.clearDebugLog()
                 }
+                .frame(minHeight: accessibilityMode ? 44 : nil)
             }
-            
+
             Section {
                 NavigationLink("Advanced Settings") {
                     AdvancedSettingsView()
                 }
+                .frame(minHeight: accessibilityMode ? 44 : nil)
             }
         }
         .navigationTitle("Settings")
