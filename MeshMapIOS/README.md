@@ -18,8 +18,7 @@ Or open **`MeshChatMVP.xcodeproj`** in Xcode → Run on **two physical devices**
 ## Run
 
 1. Install on two phones, Bluetooth on, app in foreground.
-2. Wait for link / announce so each learns the other’s **encryption** key.
-3. Add/save contact if your UI requires it; open **private chat** and send — payload on the wire is **ciphertext** when encrypted.
+2. Then use the public chat, direct message, post events, see locations of other members, and receive alerts.
 
 ## Project structure
 
