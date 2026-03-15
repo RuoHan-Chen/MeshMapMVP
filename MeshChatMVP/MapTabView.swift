@@ -255,7 +255,6 @@ struct MapTabView: View {
                     .onChange(of: mesh.mapLabels.count) { _ in
                         loadTrustData()
                     }
-                    .preferredColorScheme(.dark)
                 }
 
                 // Top Right Controls: SOS + Share
