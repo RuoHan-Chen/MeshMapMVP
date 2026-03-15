@@ -342,7 +342,7 @@ struct MapTabView: View {
                             }
                         }
                         .padding(6)
-                        .background(showAnnotationText ? .background : .clear, in: RoundedRectangle(cornerRadius: 8))
+                                    .background(showAnnotationText ? AnyShapeStyle(.background) : AnyShapeStyle(.clear), in: RoundedRectangle(cornerRadius: 8))
                         .scaleEffect(annotationScale)
                         .animation(.easeInOut, value: annotationScale)
                     }
@@ -371,7 +371,7 @@ struct MapTabView: View {
                             }
                         }
                         .padding(6)
-                        .background(showAnnotationText ? .background : .clear, in: RoundedRectangle(cornerRadius: 8))
+                                    .background(showAnnotationText ? AnyShapeStyle(.background) : AnyShapeStyle(.clear), in: RoundedRectangle(cornerRadius: 8))
                         .scaleEffect(annotationScale)
                         .animation(.easeInOut, value: annotationScale)
                     }
