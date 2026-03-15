@@ -9,6 +9,7 @@ import UIKit
 struct MapTabView: View {
     @EnvironmentObject var mesh: BluetoothMeshService
     @StateObject private var eventTypesManager = EventTypesManager()
+    @StateObject private var headingProvider = LocationHeadingProvider()
 
     private static let maxLabelDistanceMeters = 5_000.0
 
@@ -177,7 +178,12 @@ struct MapTabView: View {
         let span = region.span.latitudeDelta
         // Base span ~0.01 -> scale 1.0
         // Zoomed out -> scale down to ~0.4
-        return max(0.4, min(1.0, 0.015 / span))
+        return max(0.4, min(1.2, 0.015 / span))
+    }
+
+    /// Whether to show text labels for annotations based on zoom level.
+    private var showAnnotationText: Bool {
+        region.span.latitudeDelta < 0.02
     }
 
     var body: some View {
@@ -201,18 +207,56 @@ struct MapTabView: View {
                         MapAnnotation(coordinate: item.coordinate) {
                             switch item {
                             case .transmitter(let p):
-                                VStack(spacing: 2) {
-                                    Image(systemName: p.isCurrentUser ? "person.circle.fill" : "antenna.radiowaves.left.and.right")
-                                        .font(.title2)
-                                        .foregroundStyle(p.isCurrentUser ? .blue : .orange)
-                                    Text(p.displayName)
-                                        .font(.caption2)
-                                        .lineLimit(1)
+                                if p.isCurrentUser {
+                                    ZStack {
+                                        // Direction beam (if available)
+                                        if let heading = headingProvider.headingDegrees {
+                                            Circle()
+                                                .fill(
+                                                    AngularGradient(
+                                                        gradient: Gradient(colors: [.blue.opacity(0.3), .clear]),
+                                                        center: .center,
+                                                        startAngle: .degrees(0),
+                                                        endAngle: .degrees(60)
+                                                    )
+                                                )
+                                                .frame(width: 80, height: 80)
+                                                .rotationEffect(.degrees(heading - 90 - 30)) // Adjust for gradient start
+                                        }
+                                        
+                                        // Outer glow/shadow
+                                        Circle()
+                                            .fill(Color.blue.opacity(0.2))
+                                            .frame(width: 24, height: 24)
+                                        
+                                        // White border
+                                        Circle()
+                                            .fill(Color.white)
+                                            .frame(width: 18, height: 18)
+                                        
+                                        // Blue center
+                                        Circle()
+                                            .fill(Color.blue)
+                                            .frame(width: 14, height: 14)
+                                    }
+                                    .scaleEffect(annotationScale)
+                                    .animation(.easeInOut, value: annotationScale)
+                                } else {
+                                    VStack(spacing: 2) {
+                                        Image(systemName: "antenna.radiowaves.left.and.right")
+                                            .font(.title)
+                                            .foregroundStyle(.orange)
+                                        if showAnnotationText {
+                                            Text(p.displayName)
+                                                .font(.caption2)
+                                                .lineLimit(1)
+                                        }
+                                    }
+                                    .padding(6)
+                                    .background(showAnnotationText ? .background : .clear, in: RoundedRectangle(cornerRadius: 8))
+                                    .scaleEffect(annotationScale)
+                                    .animation(.easeInOut, value: annotationScale)
                                 }
-                                .padding(6)
-                                .background(.background, in: RoundedRectangle(cornerRadius: 8))
-                                .scaleEffect(annotationScale)
-                                .animation(.easeInOut, value: annotationScale)
                             case .labelCluster(let cluster):
                                 let sorted = cluster.records.sorted { $0.trustScore > $1.trustScore }
                                 let top = sorted.first!
@@ -225,18 +269,20 @@ struct MapTabView: View {
                                 } label: {
                                     VStack(spacing: 2) {
                                         Image(systemName: top.systemImage)
-                                            .font(.title2)
+                                            .font(.title) // Increased size
                                             .foregroundStyle(eventColor(for: top))
-                                        Text(top.displayName)
-                                            .font(.caption2)
-                                            .lineLimit(1)
-                                            .multilineTextAlignment(.center)
-                                        Text(top.voteCount == 0 ? "\(sorted.count) events · Unverified" : "\(sorted.count) events · score \(String(format: "%.1f", top.trustScore))")
-                                            .font(.caption2)
-                                            .foregroundStyle(.secondary)
+                                        if showAnnotationText {
+                                            Text(top.displayName)
+                                                .font(.caption2)
+                                                .lineLimit(1)
+                                                .multilineTextAlignment(.center)
+                                            Text(top.voteCount == 0 ? "\(sorted.count) events · Unverified" : "\(sorted.count) events · score \(String(format: "%.1f", top.trustScore))")
+                                                .font(.caption2)
+                                                .foregroundStyle(.secondary)
+                                        }
                                     }
                                     .padding(6)
-                                    .background(.background, in: RoundedRectangle(cornerRadius: 8))
+                                    .background(showAnnotationText ? .background : .clear, in: RoundedRectangle(cornerRadius: 8))
                                     .scaleEffect(annotationScale)
                                     .animation(.easeInOut, value: annotationScale)
                                 }
