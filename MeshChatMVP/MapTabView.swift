@@ -178,6 +178,15 @@ struct MapTabView: View {
         return items
     }
 
+    /// Dynamic scale for annotations based on zoom level (span).
+    /// Smaller scale when zoomed out (larger span).
+    private var annotationScale: CGFloat {
+        let span = region.span.latitudeDelta
+        // Base span ~0.01 -> scale 1.0
+        // Zoomed out -> scale down to ~0.4
+        return max(0.4, min(1.0, 0.015 / span))
+    }
+
     var body: some View {
         NavigationStack {
             ZStack(alignment: .top) {
@@ -209,6 +218,8 @@ struct MapTabView: View {
                                 }
                                 .padding(6)
                                 .background(.background, in: RoundedRectangle(cornerRadius: 8))
+                                .scaleEffect(annotationScale)
+                                .animation(.easeInOut, value: annotationScale)
                             case .labelCluster(let cluster):
                                 let sorted = cluster.records.sorted { $0.trustScore > $1.trustScore }
                                 let top = sorted.first!
@@ -233,6 +244,8 @@ struct MapTabView: View {
                                     }
                                     .padding(6)
                                     .background(.background, in: RoundedRectangle(cornerRadius: 8))
+                                    .scaleEffect(annotationScale)
+                                    .animation(.easeInOut, value: annotationScale)
                                 }
                                 .buttonStyle(.plain)
                             }
@@ -332,7 +345,8 @@ struct MapTabView: View {
                     Spacer()
                 }
             }
-            .navigationTitle("Map")
+            .navigationTitle("")
+            .toolbar(.hidden, for: .navigationBar)
             .navigationBarTitleDisplayMode(.inline)
             .alert("Label cooldown", isPresented: $showCooldownAlert) {
                 Button("OK", role: .cancel) {}
