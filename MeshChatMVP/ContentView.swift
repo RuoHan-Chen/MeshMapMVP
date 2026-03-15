@@ -34,11 +34,41 @@ struct ContentView: View {
 
 private struct ProfileView: View {
     @EnvironmentObject var mesh: BluetoothMeshService
+    @StateObject private var wifiMonitor = WiFiMonitor()
     @State private var nicknameEditor = ""
+    @State private var publishInProgress = false
+    @State private var publishMessage: String? = nil
+    @State private var publishSuccess = false
 
     var body: some View {
         NavigationStack {
             Form {
+                if wifiMonitor.isOnWifi {
+                    Section {
+                        Text("Upload current map labels and photos to MeshNews so they can appear as local stories.")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                        Button {
+                            Task { await publishToMeshNews() }
+                        } label: {
+                            HStack {
+                                Label("Upload and publish map data", systemImage: "square.and.arrow.up")
+                                if publishInProgress {
+                                    Spacer()
+                                    ProgressView()
+                                }
+                            }
+                        }
+                        .disabled(publishInProgress)
+                        if let msg = publishMessage {
+                            Text(msg)
+                                .font(.caption)
+                                .foregroundStyle(publishSuccess ? Color.secondary : Color.red)
+                        }
+                    } header: {
+                        Text("Publish to MeshNews")
+                    }
+                }
                 Section("Identity") {
                     TextField("Nickname", text: $nicknameEditor)
                     Button("Save nickname") {
@@ -78,6 +108,23 @@ private struct ProfileView: View {
             }
             .navigationTitle("You")
             .onAppear { nicknameEditor = mesh.identity.nickname }
+        }
+    }
+
+    private func publishToMeshNews() async {
+        publishInProgress = true
+        publishMessage = nil
+        let result = await publishMapDataToMeshNews(mapLabels: mesh.mapLabels, thumbnails: mesh.thumbnails, userLocation: mesh.lastKnownLocation)
+        await MainActor.run {
+            publishInProgress = false
+            switch result {
+            case .success:
+                publishSuccess = true
+                publishMessage = "Published to MeshNews."
+            case .failure(let error):
+                publishSuccess = false
+                publishMessage = error.localizedDescription
+            }
         }
     }
 }
