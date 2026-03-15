@@ -9,6 +9,7 @@ import UIKit
 struct MapTabView: View {
     @EnvironmentObject var mesh: BluetoothMeshService
     @StateObject private var eventTypesManager = EventTypesManager()
+    @StateObject private var headingProvider = LocationHeadingProvider()
 
     private static let maxLabelDistanceMeters = 5_000.0
 
@@ -20,6 +21,13 @@ struct MapTabView: View {
     @State private var selectedLabel: MapLabelRecord?
     @State private var selectedCluster: LabelCluster?
     @State private var showSOSAlert = false
+    
+    // Filters
+    @State private var filterPeers = true
+    @State private var filterHazards = true
+    @State private var filterHelp = true
+    @State private var filterOther = true
+
     /// Cached trust inputs loaded from the database.
     @State private var labelRelationships: [String: String] = [:]
     @State private var labelSightings: [String: NodeSighting] = [:]
@@ -108,7 +116,16 @@ struct MapTabView: View {
     private var labelClusters: [LabelCluster] {
         var clusters: [LabelCluster] = []
         let radiusMeters = 60.0
-        for record in labelRecords {
+        
+        let filtered = labelRecords.filter { record in
+            switch record.category {
+            case .hazard, .armedConflict, .explosion, .drone: return filterHazards
+            case .help: return filterHelp
+            default: return filterOther
+            }
+        }
+        
+        for record in filtered {
             var placed = false
             for idx in clusters.indices {
                 let center = clusters[idx].coordinate
@@ -143,9 +160,12 @@ struct MapTabView: View {
 
     /// Combined annotations: transmitters + clustered labels (single list for Map).
     private var combinedAnnotations: [MapAnnotationItem] {
-        let transmitterItems = annotationItems.map { MapAnnotationItem.transmitter($0) }
-        let labelItems = labelClusters.map { MapAnnotationItem.labelCluster($0) }
-        return transmitterItems + labelItems
+        var items: [MapAnnotationItem] = []
+        if filterPeers {
+            items.append(contentsOf: annotationItems.map { MapAnnotationItem.transmitter($0) })
+        }
+        items.append(contentsOf: labelClusters.map { MapAnnotationItem.labelCluster($0) })
+        return items
     }
 
     /// Pins to show: remote senders from senderCoordinates plus current user if sharing.
@@ -176,166 +196,30 @@ struct MapTabView: View {
     private var annotationScale: CGFloat {
         let span = region.span.latitudeDelta
         // Base span ~0.01 -> scale 1.0
-        // Zoomed out -> scale down to ~0.4
-        return max(0.4, min(1.0, 0.015 / span))
+        // Zoomed out -> scale down to ~0.7 (was 0.4)
+        // Zoomed in -> cap at 1.0 (was 1.2) to avoid taking up too much screen
+        return max(0.7, min(1.0, 0.02 / span))
+    }
+
+    /// Whether to show text labels for annotations based on zoom level.
+    private var showAnnotationText: Bool {
+        region.span.latitudeDelta < 0.02
     }
 
     var body: some View {
         NavigationStack {
             ZStack(alignment: .top) {
                 if combinedAnnotations.isEmpty {
-                    Map(coordinateRegion: $region)
-                        .ignoresSafeArea(edges: .all)
-                    VStack(spacing: 8) {
-                        Text("No positions or labels yet")
-                            .font(.headline)
-                        Text("Turn on \"Share location\" in Account to show your position. Tap \"+\" to place an incident label.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .multilineTextAlignment(.center)
-                            .padding(.horizontal)
-                    }
-                    .padding(.top, 60)
+                    emptyMapState
                 } else {
-                    Map(coordinateRegion: $region, annotationItems: combinedAnnotations) { item in
-                        MapAnnotation(coordinate: item.coordinate) {
-                            switch item {
-                            case .transmitter(let p):
-                                VStack(spacing: 2) {
-                                    Image(systemName: p.isCurrentUser ? "person.circle.fill" : "antenna.radiowaves.left.and.right")
-                                        .font(.title2)
-                                        .foregroundStyle(p.isCurrentUser ? .blue : .orange)
-                                    Text(p.displayName)
-                                        .font(.caption2)
-                                        .lineLimit(1)
-                                }
-                                .padding(6)
-                                .background(.background, in: RoundedRectangle(cornerRadius: 8))
-                                .scaleEffect(annotationScale)
-                                .animation(.easeInOut, value: annotationScale)
-                            case .labelCluster(let cluster):
-                                let sorted = cluster.records.sorted { $0.trustScore > $1.trustScore }
-                                let top = sorted.first!
-                                Button {
-                                    if sorted.count == 1 {
-                                        selectedLabel = top
-                                    } else {
-                                        selectedCluster = cluster
-                                    }
-                                } label: {
-                                    VStack(spacing: 2) {
-                                        Image(systemName: top.systemImage)
-                                            .font(.title2)
-                                            .foregroundStyle(eventColor(for: top))
-                                        Text(top.displayName)
-                                            .font(.caption2)
-                                            .lineLimit(1)
-                                            .multilineTextAlignment(.center)
-                                        Text(top.voteCount == 0 ? "\(sorted.count) events · Unverified" : "\(sorted.count) events · score \(String(format: "%.1f", top.trustScore))")
-                                            .font(.caption2)
-                                            .foregroundStyle(.secondary)
-                                    }
-                                    .padding(6)
-                                    .background(.background, in: RoundedRectangle(cornerRadius: 8))
-                                    .scaleEffect(annotationScale)
-                                    .animation(.easeInOut, value: annotationScale)
-                                }
-                                .buttonStyle(.plain)
-                            }
-                        }
-                    }
-                    .ignoresSafeArea(edges: .all)
-                    .onAppear {
-                        fitRegionToAnnotations()
-                        loadTrustData()
-                    }
-                    // Disabled auto-fit on change to prevent zoom loop
-                    // .onChange(of: mesh.senderCoordinates.count) { _ in fitRegionToAnnotations() }
-                    // .onChange(of: mesh.identity.shareLocation) { _ in fitRegionToAnnotations() }
-                    .onChange(of: mesh.mapLabels.count) { _ in
-                        loadTrustData()
-                    }
+                    mapWithAnnotations
                 }
 
                 // Top Right Controls: SOS + Share
-                VStack {
-                    HStack {
-                        Spacer()
-                        Button {
-                            showSOSAlert = true
-                        } label: {
-                            Text("SOS")
-                                .font(.subheadline.weight(.bold))
-                                .foregroundStyle(.white)
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 6)
-                                .background(.red, in: RoundedRectangle(cornerRadius: 8))
-                        }
-                        .buttonStyle(.plain)
-                        
-                        Button {
-                            prepareAndShareMap()
-                        } label: {
-                            Image(systemName: "square.and.arrow.up")
-                                .font(.body)
-                                .padding(8)
-                                .background(.ultraThinMaterial, in: Circle())
-                        }
-                        .help("Share map with outside world (events + member locations)")
-                    }
-                    .padding(.horizontal)
-                    .padding(.top, 8)
-                    Spacer()
-                }
+                topRightControls
                 
                 // Bottom Right Controls: Add Label (+) + Recenter (Location Arrow)
-                VStack {
-                    Spacer()
-                    HStack {
-                        Spacer()
-                        VStack(spacing: 16) {
-                            Button {
-                                if mesh.mapLabelCooldownRemaining > 0 {
-                                    showCooldownAlert = true
-                                } else if !isWithinPlacementRange(region.center) {
-                                    showTooFarAlert = true
-                                } else {
-                                    showAddLabelSheet = true
-                                }
-                            } label: {
-                                ZStack {
-                                    Circle()
-                                        .fill(Color.blue)
-                                        .frame(width: 56, height: 56)
-                                        .shadow(radius: 4)
-                                    if mesh.mapLabelCooldownRemaining > 0 {
-                                        Text("\(Int(ceil(mesh.mapLabelCooldownRemaining)))")
-                                            .font(.caption.monospacedDigit().bold())
-                                            .foregroundStyle(.white)
-                                    } else {
-                                        Image(systemName: "plus")
-                                            .font(.title.weight(.semibold))
-                                            .foregroundStyle(.white)
-                                    }
-                                }
-                            }
-                            .disabled(mesh.mapLabelCooldownRemaining > 0)
-                            
-                            Button {
-                                recenterMap()
-                            } label: {
-                                Image(systemName: "location.fill")
-                                    .font(.title2)
-                                    .padding(12)
-                                    .background(.ultraThinMaterial, in: Circle())
-                                    .shadow(radius: 2)
-                            }
-                            .help("Recenter map on your location")
-                        }
-                        .padding(.trailing, 16)
-                        .padding(.bottom, 20) // Lift up from tab bar
-                    }
-                }
+                bottomRightControls
             }
             .navigationTitle("")
             .toolbar(.hidden, for: .navigationBar)
@@ -406,6 +290,219 @@ struct MapTabView: View {
                     },
                     selectedCluster: $selectedCluster
                 )
+            }
+        }
+    }
+
+    private var emptyMapState: some View {
+        ZStack(alignment: .top) {
+            Map(coordinateRegion: $region)
+                .ignoresSafeArea(edges: .all)
+            VStack(spacing: 8) {
+                Text("No positions or labels yet")
+                    .font(.headline)
+                Text("Turn on \"Share location\" in Account to show your position. Tap \"+\" to place an incident label.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal)
+            }
+            .padding(.top, 60)
+        }
+    }
+
+    private var mapWithAnnotations: some View {
+        Map(coordinateRegion: $region, annotationItems: combinedAnnotations) { item in
+            MapAnnotation(coordinate: item.coordinate) {
+                switch item {
+                case .transmitter(let p):
+                    if p.isCurrentUser {
+                        ZStack {
+                            // Direction beam (if available)
+                            if let heading = headingProvider.headingDegrees {
+                                Circle()
+                                    .fill(
+                                        AngularGradient(
+                                            gradient: Gradient(colors: [.blue.opacity(0.3), .clear]),
+                                            center: .center,
+                                            startAngle: .degrees(0),
+                                            endAngle: .degrees(60)
+                                        )
+                                    )
+                                    .frame(width: 80, height: 80)
+                                    .rotationEffect(.degrees(heading - 90 - 30)) // Adjust for gradient start
+                            }
+                            
+                            // Outer glow/shadow
+                            Circle()
+                                .fill(Color.blue.opacity(0.2))
+                                .frame(width: 24, height: 24)
+                            
+                            // White border
+                            Circle()
+                                .fill(Color.white)
+                                .frame(width: 18, height: 18)
+                            
+                            // Blue center
+                            Circle()
+                                .fill(Color.blue)
+                                .frame(width: 14, height: 14)
+                        }
+                        .scaleEffect(annotationScale)
+                        .animation(.easeInOut, value: annotationScale)
+                    } else {
+                        VStack(spacing: 2) {
+                            Image(systemName: "antenna.radiowaves.left.and.right")
+                                .font(.title)
+                                .foregroundStyle(.orange)
+                            if showAnnotationText {
+                                Text(p.displayName)
+                                    .font(.caption2)
+                                    .lineLimit(1)
+                            }
+                        }
+                        .padding(6)
+                        .background(showAnnotationText ? AnyShapeStyle(.regularMaterial) : AnyShapeStyle(.clear), in: RoundedRectangle(cornerRadius: 8))
+                        .scaleEffect(annotationScale)
+                        .animation(.easeInOut, value: annotationScale)
+                    }
+                case .labelCluster(let cluster):
+                    let sorted = cluster.records.sorted { $0.trustScore > $1.trustScore }
+                    let top = sorted.first!
+                    Button {
+                        if sorted.count == 1 {
+                            selectedLabel = top
+                        } else {
+                            selectedCluster = cluster
+                        }
+                    } label: {
+                        VStack(spacing: 2) {
+                            Image(systemName: top.systemImage)
+                                .font(.title) // Increased size
+                                .foregroundStyle(eventColor(for: top))
+                            if showAnnotationText {
+                                Text(top.displayName)
+                                    .font(.caption2)
+                                    .lineLimit(1)
+                                    .multilineTextAlignment(.center)
+                                Text(top.voteCount == 0 ? "\(sorted.count) events · Unverified" : "\(sorted.count) events · score \(String(format: "%.1f", top.trustScore))")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        .padding(6)
+                        .background(showAnnotationText ? AnyShapeStyle(.regularMaterial) : AnyShapeStyle(.clear), in: RoundedRectangle(cornerRadius: 8))
+                        .scaleEffect(annotationScale)
+                        .animation(.easeInOut, value: annotationScale)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+        .ignoresSafeArea(edges: .all)
+        .onAppear {
+            fitRegionToAnnotations()
+            loadTrustData()
+        }
+        // Disabled auto-fit on change to prevent zoom loop
+        // .onChange(of: mesh.senderCoordinates.count) { _ in fitRegionToAnnotations() }
+        // .onChange(of: mesh.identity.shareLocation) { _ in fitRegionToAnnotations() }
+        .onChange(of: mesh.mapLabels.count) { _ in
+            loadTrustData()
+        }
+    }
+
+    private var topRightControls: some View {
+        VStack {
+            HStack {
+                Spacer()
+                
+                Menu {
+                    Toggle("Peers", isOn: $filterPeers)
+                    Toggle("Hazards", isOn: $filterHazards)
+                    Toggle("Help Needed", isOn: $filterHelp)
+                    Toggle("Other", isOn: $filterOther)
+                } label: {
+                    Image(systemName: "line.3.horizontal.decrease.circle.fill")
+                        .font(.title2)
+                        .padding(8)
+                        .background(.ultraThinMaterial, in: Circle())
+                }
+                
+                Button {
+                    showSOSAlert = true
+                } label: {
+                    Text("SOS")
+                        .font(.subheadline.weight(.bold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(.red, in: RoundedRectangle(cornerRadius: 8))
+                }
+                .buttonStyle(.plain)
+                
+                Button {
+                    prepareAndShareMap()
+                } label: {
+                    Image(systemName: "square.and.arrow.up")
+                        .font(.body)
+                        .padding(8)
+                        .background(.ultraThinMaterial, in: Circle())
+                }
+                .help("Share map with outside world (events + member locations)")
+            }
+            .padding(.horizontal)
+            .padding(.top, 8)
+            Spacer()
+        }
+    }
+
+    private var bottomRightControls: some View {
+        VStack {
+            Spacer()
+            HStack {
+                Spacer()
+                VStack(spacing: 16) {
+                    Button {
+                        if mesh.mapLabelCooldownRemaining > 0 {
+                            showCooldownAlert = true
+                        } else if !isWithinPlacementRange(region.center) {
+                            showTooFarAlert = true
+                        } else {
+                            showAddLabelSheet = true
+                        }
+                    } label: {
+                        ZStack {
+                            Circle()
+                                .fill(Color.blue)
+                                .frame(width: 56, height: 56)
+                                .shadow(radius: 4)
+                            if mesh.mapLabelCooldownRemaining > 0 {
+                                Text("\(Int(ceil(mesh.mapLabelCooldownRemaining)))")
+                                    .font(.caption.monospacedDigit().bold())
+                                    .foregroundStyle(.white)
+                            } else {
+                                Image(systemName: "plus")
+                                    .font(.title.weight(.semibold))
+                                    .foregroundStyle(.white)
+                            }
+                        }
+                    }
+                    .disabled(mesh.mapLabelCooldownRemaining > 0)
+                    
+                    Button {
+                        recenterMap()
+                    } label: {
+                        Image(systemName: "location.fill")
+                            .font(.title2)
+                            .padding(12)
+                            .background(.ultraThinMaterial, in: Circle())
+                            .shadow(radius: 2)
+                    }
+                    .help("Recenter map on your location")
+                }
+                .padding(.trailing, 16)
+                .padding(.bottom, 20) // Lift up from tab bar
             }
         }
     }
