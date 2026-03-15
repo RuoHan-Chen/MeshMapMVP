@@ -20,6 +20,9 @@ struct MapTabView: View {
     @State private var selectedLabel: MapLabelRecord?
     @State private var selectedCluster: LabelCluster?
     @State private var showSOSAlert = false
+    @State private var showSOSNoLocationAlert = false
+    @State private var showSOSAlreadyPostedAlert = false
+    @State private var showSOSFailedAlert = false
     /// Cached trust inputs loaded from the database.
     @State private var labelRelationships: [String: String] = [:]
     @State private var labelSightings: [String: NodeSighting] = [:]
@@ -36,8 +39,11 @@ struct MapTabView: View {
         return mesh.mapLabels.compactMap { id, payload in
             guard let record = buildRecord(id: id, payload: payload) else { return nil }
             guard now.timeIntervalSince(record.date) <= MapLabelRecord.eventExpirationInterval else { return nil }
-            let dist = BluetoothMeshService.haversineMeters(lat1: myLoc.lat, lon1: myLoc.lon, lat2: payload.lat, lon2: payload.lon)
-            guard dist <= Self.maxLabelDistanceMeters else { return nil }
+            let isEmergency = payload.category == LabelCategory.emergency.rawValue
+            if !isEmergency {
+                let dist = BluetoothMeshService.haversineMeters(lat1: myLoc.lat, lon1: myLoc.lon, lat2: payload.lat, lon2: payload.lon)
+                guard dist <= Self.maxLabelDistanceMeters else { return nil }
+            }
             return record
         }
     }
@@ -350,11 +356,33 @@ struct MapTabView: View {
             } message: {
                 Text("Place event labels within 5 km of your current location. Turn on Share location and move closer.")
             }
-            .alert("Contact emergency services?", isPresented: $showSOSAlert) {
+            .alert("Create emergency event?", isPresented: $showSOSAlert) {
                 Button("No", role: .cancel) {}
-                Button("Yes", role: .destructive) {}
+                Button("Yes", role: .destructive) {
+                    switch mesh.sendEmergencySOSLabel() {
+                    case .success: break
+                    case .noLocation: showSOSNoLocationAlert = true
+                    case .alreadyPosted: showSOSAlreadyPostedAlert = true
+                    case .failed: showSOSFailedAlert = true
+                    }
+                }
             } message: {
-                Text("Dummy SOS button for prototype only. This does not call emergency services.")
+                Text("This will create an emergency event that will propagate through the mesh network. Do you wish to proceed?")
+            }
+            .alert("Location required", isPresented: $showSOSNoLocationAlert) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text("Enable location sharing in Account → Privacy to place an SOS event.")
+            }
+            .alert("Already posted", isPresented: $showSOSAlreadyPostedAlert) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text("You may only have one active SOS event. Delete your existing SOS before posting another.")
+            }
+            .alert("Could not send", isPresented: $showSOSFailedAlert) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text("Something went wrong. Please try again.")
             }
             .sheet(isPresented: $showAddLabelSheet) {
                 AddLabelSheet(regionCenter: region.center, eventTypesConfig: eventTypesManager.config) { category, customName, customDescription, iconName, thumbnailData in
@@ -633,8 +661,9 @@ struct MapTabView: View {
         }
     }
 
-    /// Color for event pin: normalized trustScore — higher = greener (more trusted).
+    /// Color for event pin: emergency = red; else normalized trustScore — higher = greener (more trusted).
     private func eventColor(for record: MapLabelRecord) -> Color {
+        if record.category == .emergency { return .red }
         // Normalize: 10 = self-authored baseline. >10 = vouched. <0 = denied.
         let normalized = max(0, min(1, record.trustScore / 10.0))
         let red   = min(1, (1 - normalized) * 2)
@@ -1040,6 +1069,7 @@ private struct ClusterListSheet: View {
     }
 
     private func rowColor(for record: MapLabelRecord) -> Color {
+        if record.category == .emergency { return .red }
         let normalized = max(0, min(1, record.trustScore / 10.0))
         let red   = min(1, (1 - normalized) * 2)
         let green = min(1, normalized * 2)

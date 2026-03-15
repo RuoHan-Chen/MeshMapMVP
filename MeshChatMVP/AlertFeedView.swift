@@ -154,9 +154,9 @@ private struct LabelEventClusterRow: View {
     }
     private var pinColor: Color {
         switch category {
-        case .hazard, .armedConflict, .explosion, .drone: return .red
-        case .help:                                        return .green
-        default:                                           return .orange
+        case .emergency, .hazard, .armedConflict, .explosion, .drone: return .red
+        case .help:                                                  return .green
+        default:                                                     return .orange
         }
     }
     private var timeAgo: String {

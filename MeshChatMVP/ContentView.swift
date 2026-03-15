@@ -42,6 +42,24 @@ struct ContentView: View {
             nicknameEditor = mesh.identity.nickname
             mesh.syncScanTimingFromUI()
         }
+        .alert("SOS / Emergency", isPresented: Binding(
+            get: { mesh.pendingSOSAlert != nil },
+            set: { if !$0 { mesh.pendingSOSAlert = nil } }
+        )) {
+            Button("View on Map") {
+                if let sos = mesh.pendingSOSAlert {
+                    mapRegion.center = CLLocationCoordinate2D(latitude: sos.lat, longitude: sos.lon)
+                    mapRegion.span = MKCoordinateSpan(latitudeDelta: 0.002, longitudeDelta: 0.002)
+                    selectedTab = 1
+                }
+                mesh.pendingSOSAlert = nil
+            }
+            Button("Dismiss", role: .cancel) {
+                mesh.pendingSOSAlert = nil
+            }
+        } message: {
+            Text("Emergency assistance requested from \(mesh.pendingSOSAlert?.senderName ?? "someone"). Tap View to see on map.")
+        }
     }
 }
 

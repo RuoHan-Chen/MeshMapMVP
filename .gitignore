@@ -1,6 +1,7 @@
 # Xcode — builds & indexes
 DerivedData/
 build/
+*.o
 *.xcuserstate
 *.xccheckout
 *.xcscmblueprint

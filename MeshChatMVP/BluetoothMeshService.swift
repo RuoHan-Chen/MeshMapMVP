@@ -61,6 +61,9 @@ final class BluetoothMeshService: NSObject, ObservableObject {
     /// In-memory thumbnail cache: labelId → compressed image data (small, capped).
     @Published private(set) var thumbnails: [UUID: Data] = [:]
 
+    /// When non-nil, an SOS was just received; show in-app alert. Cleared when user dismisses.
+    @Published var pendingSOSAlert: (senderName: String, labelId: UUID, lat: Double, lon: Double)? = nil
+
     /// Seconds remaining before this user can post another map label (30s cooldown).
     @Published var mapLabelCooldownRemaining: Double = 0
 
@@ -598,6 +601,7 @@ final class BluetoothMeshService: NSObject, ObservableObject {
     static let maxEventPlacementDistanceMeters: Double = 5_000
 
     /// Call from main. Returns false if on cooldown (30s) or beyond 5km; true if send was queued.
+    /// Set emergencyBypass true for SOS to skip cooldown and 5km limits.
     func sendMapLabel(
         category: LabelCategory,
         lat: Double,
@@ -605,22 +609,25 @@ final class BluetoothMeshService: NSObject, ObservableObject {
         customLabelName: String? = nil,
         customDescription: String? = nil,
         customSystemImage: String? = nil,
-        id explicitId: UUID? = nil
+        id explicitId: UUID? = nil,
+        emergencyBypass: Bool = false
     ) -> Bool {
-        if mapLabelCooldownRemaining > 0 {
-            log("Map label: cooldown (\(Int(mapLabelCooldownRemaining))s left)")
-            return false
-        }
-        if let my = lastKnownLocation {
-            let dist = Self.haversineMeters(lat1: my.lat, lon1: my.lon, lat2: lat, lon2: lon)
-            if dist > Self.maxEventPlacementDistanceMeters {
-                log("Map label: too far (\(Int(dist))m > 5km)")
+        if !emergencyBypass {
+            if mapLabelCooldownRemaining > 0 {
+                log("Map label: cooldown (\(Int(mapLabelCooldownRemaining))s left)")
                 return false
             }
+            if let my = lastKnownLocation {
+                let dist = Self.haversineMeters(lat1: my.lat, lon1: my.lon, lat2: lat, lon2: lon)
+                if dist > Self.maxEventPlacementDistanceMeters {
+                    log("Map label: too far (\(Int(dist))m > 5km)")
+                    return false
+                }
+            }
+            lastMapLabelSendTime = Date()
+            mapLabelCooldownRemaining = mapLabelCooldownSeconds
+            startMapLabelCooldownTimer()
         }
-        lastMapLabelSendTime = Date()
-        mapLabelCooldownRemaining = mapLabelCooldownSeconds
-        startMapLabelCooldownTimer()
 
         let labelId = explicitId ?? UUID()
         let payload = MapLabelPayload(
@@ -657,12 +664,58 @@ final class BluetoothMeshService: NSObject, ObservableObject {
         DispatchQueue.main.async { [weak self] in
             self?.mapLabels[payload.id] = payload
         }
+        let isEmergency = category == .emergency
         bleQueue.async { [weak self] in
-            if self?.broadcastEnvelope(env, excludeCentral: nil, excludePeripheral: nil) == true {
-                self?.log("Map label sent \(payload.id)")
+            guard let self else { return }
+            let sent = self.broadcastEnvelope(env, excludeCentral: nil, excludePeripheral: nil)
+            if sent {
+                self.log("Map label sent \(payload.id)")
+            } else if let data = MeshEnvelope.encodeJSON(env) {
+                self.log("Map label broadcast failed: envelope \(data.count) bytes (max 512)")
+            } else {
+                self.log("Map label broadcast failed: encode error")
+            }
+            if isEmergency {
+                self.bleQueue.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+                    _ = self?.broadcastEnvelope(env, excludeCentral: nil, excludePeripheral: nil)
+                }
             }
         }
         return true
+    }
+
+    /// Result of attempting to send an SOS.
+    enum SendSOSResult {
+        case success
+        case noLocation
+        case alreadyPosted
+        case failed
+    }
+
+    /// Sends an emergency SOS using the standard map label flow. Each user may only have one active SOS.
+    /// Call from main. Creates event directly via sendMapLabel for robustness.
+    func sendEmergencySOSLabel() -> SendSOSResult {
+        let hasExistingSOS = mapLabels.values.contains {
+            $0.category == LabelCategory.emergency.rawValue && $0.senderID == identity.deviceID
+        }
+        if hasExistingSOS {
+            log("SOS: already have an active SOS")
+            return .alreadyPosted
+        }
+        guard let loc = lastKnownLocation else {
+            log("SOS: no location available")
+            return .noLocation
+        }
+        let ok = sendMapLabel(
+            category: .emergency,
+            lat: loc.lat,
+            lon: loc.lon,
+            customLabelName: "SOS",
+            customDescription: "Emergency",
+            customSystemImage: nil,
+            emergencyBypass: true
+        )
+        return ok ? .success : .failed
     }
 
     /// Convenience: create a label and immediately send a small thumbnail image with it.
@@ -719,6 +772,17 @@ final class BluetoothMeshService: NSObject, ObservableObject {
         content.title = "New map label"
         content.body = "\(categoryDisplayName) from \(senderName)"
         content.sound = .default
+        let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: UNTimeIntervalNotificationTrigger(timeInterval: 0.1, repeats: false))
+        UNUserNotificationCenter.current().add(request)
+    }
+
+    /// Urgent notification for SOS; always shown regardless of app state.
+    private func notifySOSReceived(from senderName: String) {
+        let content = UNMutableNotificationContent()
+        content.title = "SOS / Emergency"
+        content.body = "Emergency assistance requested from \(senderName)"
+        content.sound = .default
+        content.interruptionLevel = .timeSensitive
         let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: UNTimeIntervalNotificationTrigger(timeInterval: 0.1, repeats: false))
         UNUserNotificationCenter.current().add(request)
     }
@@ -1365,10 +1429,18 @@ final class BluetoothMeshService: NSObject, ObservableObject {
                 let senderName = env.senderName
                 let senderID = env.senderID
                 let isLiveBroadcast = env.ttl > 1
+                let isEmergency = wire.category == LabelCategory.emergency.rawValue
                 DispatchQueue.main.async { [weak self] in
-                    self?.mapLabels[payload.id] = payload
-                    if let self, senderID != self.identity.deviceID, isLiveBroadcast {
-                        self.notifyLabelReceived(categoryDisplayName: categoryDisplay, from: senderName)
+                    guard let self else { return }
+                    self.mapLabels[payload.id] = payload
+                    if isEmergency { self.objectWillChange.send() }
+                    if senderID != self.identity.deviceID {
+                        if isEmergency {
+                            self.notifySOSReceived(from: senderName)
+                            self.pendingSOSAlert = (senderName, payload.id, payload.lat, payload.lon)
+                        } else if isLiveBroadcast {
+                            self.notifyLabelReceived(categoryDisplayName: categoryDisplay, from: senderName)
+                        }
                     }
                 }
                 log("Map label received \(payload.id) from \(env.senderName)")

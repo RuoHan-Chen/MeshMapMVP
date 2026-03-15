@@ -18,7 +18,6 @@
 		A1000009 /* ChatMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000009 /* ChatMessage.swift */; };
 		A100000A /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A200000A /* Assets.xcassets */; };
 		A100000B /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200000C /* ChatView.swift */; };
-		A100000C /* DebugDashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200000D /* DebugDashboardView.swift */; };
 		A100000E /* MapTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200000E /* MapTabView.swift */; };
 		A100000F /* MapLabelModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200000F /* MapLabelModels.swift */; };
 		A1000010 /* ImageChunkPayload.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000010 /* ImageChunkPayload.swift */; };
@@ -58,7 +57,6 @@
 		A2000009 /* ChatMessage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatMessage.swift; sourceTree = "<group>"; };
 		A200000A /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		A200000C /* ChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatView.swift; sourceTree = "<group>"; };
-		A200000D /* DebugDashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DebugDashboardView.swift; sourceTree = "<group>"; };
 		A200000E /* MapTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapTabView.swift; sourceTree = "<group>"; };
 		A200000F /* MapLabelModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapLabelModels.swift; sourceTree = "<group>"; };
 		A2000010 /* ImageChunkPayload.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageChunkPayload.swift; sourceTree = "<group>"; };
@@ -110,7 +108,6 @@
 				A2000001 /* MeshChatApp.swift */,
 				A2000002 /* ContentView.swift */,
 				A200000C /* ChatView.swift */,
-				A200000D /* DebugDashboardView.swift */,
 				A200000E /* MapTabView.swift */,
 				A2000003 /* BluetoothMeshService.swift */,
 				A2000004 /* MeshEnvelope.swift */,
@@ -230,7 +227,6 @@
 				A1000002 /* ContentView.swift in Sources */,
 				A100000F /* MapLabelModels.swift in Sources */,
 				A100000B /* ChatView.swift in Sources */,
-				A100000C /* DebugDashboardView.swift in Sources */,
 				A100000E /* MapTabView.swift in Sources */,
 				A1000003 /* BluetoothMeshService.swift in Sources */,
 				A1000004 /* MeshEnvelope.swift in Sources */,
@@ -315,7 +311,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 74YAK3G39Z;
+				DEVELOPMENT_TEAM = 6VX7H735DM;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = MeshChat;
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "MeshChat uses Bluetooth LE to discover nearby devices and relay messages.";
@@ -328,7 +324,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.ruohanchen.MeshChatMVP;
+				PRODUCT_BUNDLE_IDENTIFIER = com.jeremiahwebb.MeshChatMVP;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
@@ -342,7 +338,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 74YAK3G39Z;
+				DEVELOPMENT_TEAM = 6VX7H735DM;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = MeshChat;
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "MeshChat uses Bluetooth LE to discover nearby devices and relay messages.";
@@ -355,7 +351,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.ruohanchen.MeshChatMVP;
+				PRODUCT_BUNDLE_IDENTIFIER = com.jeremiahwebb.MeshChatMVP;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;

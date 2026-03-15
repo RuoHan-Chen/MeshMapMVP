@@ -4,6 +4,7 @@ import CoreLocation
 /// Category for user-placed map labels (shared over mesh).
 /// First three are the configurable event types (Hazard, Help, Other); rest are legacy.
 public enum LabelCategory: String, Codable, CaseIterable {
+    case emergency = "emergency"
     case hazard = "hazard"
     case help = "help"
     case other = "other"
@@ -18,6 +19,7 @@ public enum LabelCategory: String, Codable, CaseIterable {
     /// Default display name; can be overridden by customLabelName on the record.
     public var displayName: String {
         switch self {
+        case .emergency: return "SOS / Emergency"
         case .hazard: return "Hazard"
         case .help: return "Help"
         case .other: return "Other"
@@ -33,6 +35,7 @@ public enum LabelCategory: String, Codable, CaseIterable {
 
     public var systemImage: String {
         switch self {
+        case .emergency: return "exclamationmark.octagon.fill"
         case .hazard: return "exclamationmark.triangle.fill"
         case .help: return "hand.raised.fill"
         case .other: return "questionmark.circle.fill"
