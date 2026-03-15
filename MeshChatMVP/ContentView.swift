@@ -1,16 +1,24 @@
 import SwiftUI
 import CoreBluetooth
+import MapKit
 
 struct ContentView: View {
     @EnvironmentObject var mesh: BluetoothMeshService
     @State private var nicknameEditor = ""
+    
+    // Lifted map state so Settings can access it (e.g. for offline caching)
+    @State private var mapRegion = MKCoordinateRegion(
+        center: CLLocationCoordinate2D(latitude: -33.8688, longitude: 151.2093),
+        span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
+    )
+    @State private var isCachingMap = false
 
     var body: some View {
         TabView {
             ChatView()
                 .tabItem { Label("Chat", systemImage: "bubble.left.and.bubble.right") }
 
-            MapTabView()
+            MapTabView(region: $mapRegion)
                 .tabItem { Label("Map", systemImage: "map") }
 
             AlertFeedView()
@@ -20,7 +28,7 @@ struct ContentView: View {
                 .environmentObject(mesh)
                 .tabItem { Label("Contacts", systemImage: "person.2") }
 
-            ProfileView()
+            ProfileView(mapRegion: $mapRegion, isCachingMap: $isCachingMap)
                 .tabItem { Label("Account", systemImage: "person.circle") }
         }
         .onAppear {
@@ -33,6 +41,8 @@ struct ContentView: View {
 private struct ProfileView: View {
     @EnvironmentObject var mesh: BluetoothMeshService
     @State private var nicknameEditor = ""
+    @Binding var mapRegion: MKCoordinateRegion
+    @Binding var isCachingMap: Bool
 
     var body: some View {
         NavigationStack {
@@ -71,7 +81,7 @@ private struct ProfileView: View {
                 
                 Section {
                     NavigationLink("Settings") {
-                        SettingsView()
+                        SettingsView(mapRegion: $mapRegion, isCachingMap: $isCachingMap)
                     }
                 }
                 
@@ -89,10 +99,16 @@ private struct ProfileView: View {
 
 private struct SettingsView: View {
     @EnvironmentObject var mesh: BluetoothMeshService
+    @Binding var mapRegion: MKCoordinateRegion
+    @Binding var isCachingMap: Bool
+    @State private var showOfflineSheet = false
     
     var body: some View {
         Form {
             Section("Data & Storage") {
+                Button("Offline Maps") {
+                    showOfflineSheet = true
+                }
                 Button("Clear chat messages", role: .destructive) {
                     mesh.clearChatMessages()
                 }
@@ -111,6 +127,62 @@ private struct SettingsView: View {
             }
         }
         .navigationTitle("Settings")
+        .sheet(isPresented: $showOfflineSheet) {
+            OfflineMapSheet(isCaching: $isCachingMap, region: mapRegion, onCache: cacheCurrentRegion)
+        }
+    }
+    
+    /// Preload/cache current map region for better offline use (MapKit caches tiles when rendered).
+    private func cacheCurrentRegion() {
+        guard !isCachingMap else { return }
+        isCachingMap = true
+        let options = MKMapSnapshotter.Options()
+        options.region = mapRegion
+        options.size = CGSize(width: 512, height: 512)
+        let snapshotter = MKMapSnapshotter(options: options)
+        snapshotter.start { _, _ in
+            DispatchQueue.main.async { isCachingMap = false }
+        }
+    }
+}
+
+private struct OfflineMapSheet: View {
+    @Binding var isCaching: Bool
+    let region: MKCoordinateRegion
+    let onCache: () -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    Text("Map tiles are cached as you pan and zoom. To preload the current area, tap below. For full offline use, download regions in the Apple Maps app: Settings → Maps → turn on Offline, or open Maps and download areas before going offline.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                Section("This area") {
+                    Button {
+                        onCache()
+                    } label: {
+                        HStack {
+                            Label("Cache current map area", systemImage: "square.and.arrow.down")
+                            if isCaching {
+                                Spacer()
+                                ProgressView()
+                            }
+                        }
+                    }
+                    .disabled(isCaching)
+                }
+            }
+            .navigationTitle("Offline maps")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }
+                }
+            }
+        }
     }
 }
 
