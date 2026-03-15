@@ -21,6 +21,13 @@ struct MapTabView: View {
     @State private var selectedLabel: MapLabelRecord?
     @State private var selectedCluster: LabelCluster?
     @State private var showSOSAlert = false
+    
+    // Filters
+    @State private var filterPeers = true
+    @State private var filterHazards = true
+    @State private var filterHelp = true
+    @State private var filterOther = true
+
     /// Cached trust inputs loaded from the database.
     @State private var labelRelationships: [String: String] = [:]
     @State private var labelSightings: [String: NodeSighting] = [:]
@@ -109,7 +116,16 @@ struct MapTabView: View {
     private var labelClusters: [LabelCluster] {
         var clusters: [LabelCluster] = []
         let radiusMeters = 60.0
-        for record in labelRecords {
+        
+        let filtered = labelRecords.filter { record in
+            switch record.category {
+            case .hazard, .armedConflict, .explosion, .drone: return filterHazards
+            case .help: return filterHelp
+            default: return filterOther
+            }
+        }
+        
+        for record in filtered {
             var placed = false
             for idx in clusters.indices {
                 let center = clusters[idx].coordinate
@@ -144,9 +160,12 @@ struct MapTabView: View {
 
     /// Combined annotations: transmitters + clustered labels (single list for Map).
     private var combinedAnnotations: [MapAnnotationItem] {
-        let transmitterItems = annotationItems.map { MapAnnotationItem.transmitter($0) }
-        let labelItems = labelClusters.map { MapAnnotationItem.labelCluster($0) }
-        return transmitterItems + labelItems
+        var items: [MapAnnotationItem] = []
+        if filterPeers {
+            items.append(contentsOf: annotationItems.map { MapAnnotationItem.transmitter($0) })
+        }
+        items.append(contentsOf: labelClusters.map { MapAnnotationItem.labelCluster($0) })
+        return items
     }
 
     /// Pins to show: remote senders from senderCoordinates plus current user if sharing.
@@ -343,7 +362,7 @@ struct MapTabView: View {
                             }
                         }
                         .padding(6)
-                                    .background(showAnnotationText ? AnyShapeStyle(.background) : AnyShapeStyle(.clear), in: RoundedRectangle(cornerRadius: 8))
+                        .background(showAnnotationText ? AnyShapeStyle(.regularMaterial) : AnyShapeStyle(.clear), in: RoundedRectangle(cornerRadius: 8))
                         .scaleEffect(annotationScale)
                         .animation(.easeInOut, value: annotationScale)
                     }
@@ -372,7 +391,7 @@ struct MapTabView: View {
                             }
                         }
                         .padding(6)
-                                    .background(showAnnotationText ? AnyShapeStyle(.background) : AnyShapeStyle(.clear), in: RoundedRectangle(cornerRadius: 8))
+                        .background(showAnnotationText ? AnyShapeStyle(.regularMaterial) : AnyShapeStyle(.clear), in: RoundedRectangle(cornerRadius: 8))
                         .scaleEffect(annotationScale)
                         .animation(.easeInOut, value: annotationScale)
                     }
@@ -397,6 +416,19 @@ struct MapTabView: View {
         VStack {
             HStack {
                 Spacer()
+                
+                Menu {
+                    Toggle("Peers", isOn: $filterPeers)
+                    Toggle("Hazards", isOn: $filterHazards)
+                    Toggle("Help Needed", isOn: $filterHelp)
+                    Toggle("Other", isOn: $filterOther)
+                } label: {
+                    Image(systemName: "line.3.horizontal.decrease.circle.fill")
+                        .font(.title2)
+                        .padding(8)
+                        .background(.ultraThinMaterial, in: Circle())
+                }
+                
                 Button {
                     showSOSAlert = true
                 } label: {
