@@ -18,7 +18,7 @@ Or open **`MeshChatMVP.xcodeproj`** in Xcode → Run on **two physical devices**
 ## Run
 
 1. Install on two phones, Bluetooth on, app in foreground.
-2. Then use the public chat, direct message, post events, see locations of other members, and receive alerts.
+2. Then use the public chat, direct message, post events, see locations of other members, and receive alerts all inside the app using Bluetooth with no internet connection.
 
 ## Project structure
 
