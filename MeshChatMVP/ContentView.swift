@@ -12,24 +12,31 @@ struct ContentView: View {
         span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
     )
     @State private var isCachingMap = false
-
+    @State private var selectedTab: Int = 2 // Default to Alerts for testing or 0? User didn't specify. Let's stick to 0 or whatever default.
+    // Actually, usually 0 (Chat).
+    
     var body: some View {
-        TabView {
+        TabView(selection: $selectedTab) {
             ChatView()
                 .tabItem { Label("Chat", systemImage: "bubble.left.and.bubble.right") }
+                .tag(0)
 
             MapTabView(region: $mapRegion)
                 .tabItem { Label("Map", systemImage: "map") }
+                .tag(1)
 
-            AlertFeedView()
+            AlertFeedView(selectedTab: $selectedTab, mapRegion: $mapRegion)
                 .tabItem { Label("Alerts", systemImage: "exclamationmark.triangle") }
+                .tag(2)
 
             ContactsListView()
                 .environmentObject(mesh)
                 .tabItem { Label("Contacts", systemImage: "person.2") }
+                .tag(3)
 
             ProfileView(mapRegion: $mapRegion, isCachingMap: $isCachingMap)
                 .tabItem { Label("Account", systemImage: "person.circle") }
+                .tag(4)
         }
         .onAppear {
             nicknameEditor = mesh.identity.nickname

@@ -1,10 +1,13 @@
 import SwiftUI
+import MapKit
 
 // Disambiguate our Alert model from SwiftUI.Alert.
 private typealias MeshAlert = Alert
 
 struct AlertFeedView: View {
     @EnvironmentObject var mesh: BluetoothMeshService
+    @Binding var selectedTab: Int
+    @Binding var mapRegion: MKCoordinateRegion
 
     @State private var clusters: [LabelEventCluster] = []
     @State private var myVotes:  [UUID: Int]         = [:]
@@ -23,6 +26,11 @@ struct AlertFeedView: View {
                             mesh.voteForLabel(labelId: labelID, up: confirms)
                             myVotes[labelID] = confirms ? 1 : -1
                             reload()
+                        },
+                        onNavigate: { lat, lon in
+                            mapRegion.center = CLLocationCoordinate2D(latitude: lat, longitude: lon)
+                            mapRegion.span = MKCoordinateSpan(latitudeDelta: 0.005, longitudeDelta: 0.005)
+                            selectedTab = 1 // Switch to Map tab
                         }
                     )
                 }
@@ -133,6 +141,7 @@ private struct LabelEventClusterRow: View {
     let myVotes:    [UUID: Int]
     let myDeviceID: String
     let onVote:     (UUID, Bool) -> Void
+    let onNavigate: (Double, Double) -> Void
 
     private var leadScored: ScoredLabel   { cluster.leadScoredLabel }
     private var lead: MapLabelPayload     { leadScored.payload }
@@ -159,42 +168,53 @@ private struct LabelEventClusterRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .top) {
-                Image(systemName: category.systemImage)
-                    .foregroundStyle(pinColor)
-                Text(displayName)
-                    .font(.body)
-                    .lineLimit(2)
-                Spacer()
-                if isUnverified {
-                    Text("Unverified")
-                        .font(.caption.bold())
-                        .foregroundStyle(.orange)
-                } else {
-                    Text(String(format: "%.1f", cluster.clusterScore))
-                        .font(.caption.monospacedDigit())
-                        .foregroundStyle(.secondary)
+            // Tappable content area for navigation
+            Button {
+                onNavigate(lead.lat, lead.lon)
+            } label: {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(alignment: .top) {
+                        Image(systemName: category.systemImage)
+                            .foregroundStyle(pinColor)
+                        Text(displayName)
+                            .font(.body)
+                            .foregroundStyle(.primary)
+                            .lineLimit(2)
+                            .multilineTextAlignment(.leading)
+                        Spacer()
+                        if isUnverified {
+                            Text("Unverified")
+                                .font(.caption.bold())
+                                .foregroundStyle(.orange)
+                        } else {
+                            Text(String(format: "%.1f", cluster.clusterScore))
+                                .font(.caption.monospacedDigit())
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+
+                    if let desc = lead.customDescription, !desc.isEmpty {
+                        Text(desc)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                            .multilineTextAlignment(.leading)
+                    }
+
+                    HStack(spacing: 4) {
+                        if cluster.labels.count > 1 {
+                            Text("\(cluster.labels.count) reports")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Text(timeAgo)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 }
             }
-
-            if let desc = lead.customDescription, !desc.isEmpty {
-                Text(desc)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
-            }
-
-            HStack(spacing: 4) {
-                if cluster.labels.count > 1 {
-                    Text("\(cluster.labels.count) reports")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-                Text(timeAgo)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
+            .buttonStyle(.plain)
 
             if isOwn {
                 Text("Your post")
@@ -202,21 +222,27 @@ private struct LabelEventClusterRow: View {
                     .foregroundStyle(.tertiary)
             } else {
                 HStack(spacing: 12) {
+                    // Confirm Button
                     Button { onVote(lead.id, true) } label: {
-                        Label("Confirm", systemImage: "hand.thumbsup")
+                        Label("Confirm", systemImage: "hand.thumbsup.fill")
                             .font(.caption)
+                            .frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(.bordered)
-                    .tint(myVote == 1 ? .green : nil)
-                    .disabled(myVote != nil)
+                    .buttonStyle(myVote == 1 ? .borderedProminent : .bordered)
+                    .tint(.green)
+                    .disabled(myVote == -1) // Disable if denied
+                    .opacity(myVote == -1 ? 0.5 : 1.0)
 
+                    // Deny Button
                     Button { onVote(lead.id, false) } label: {
-                        Label("Deny", systemImage: "hand.thumbsdown")
+                        Label("Deny", systemImage: "hand.thumbsdown.fill")
                             .font(.caption)
+                            .frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(.bordered)
-                    .tint(myVote == -1 ? .red : nil)
-                    .disabled(myVote != nil)
+                    .buttonStyle(myVote == -1 ? .borderedProminent : .bordered)
+                    .tint(.red)
+                    .disabled(myVote == 1) // Disable if confirmed
+                    .opacity(myVote == 1 ? 0.5 : 1.0)
                 }
             }
         }
