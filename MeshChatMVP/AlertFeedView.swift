@@ -29,7 +29,7 @@ struct AlertFeedView: View {
                         },
                         onNavigate: { lat, lon in
                             mapRegion.center = CLLocationCoordinate2D(latitude: lat, longitude: lon)
-                            mapRegion.span = MKCoordinateSpan(latitudeDelta: 0.005, longitudeDelta: 0.005)
+                            mapRegion.span = MKCoordinateSpan(latitudeDelta: 0.002, longitudeDelta: 0.002)
                             selectedTab = 1 // Switch to Map tab
                         }
                     )

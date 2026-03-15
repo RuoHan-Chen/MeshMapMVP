@@ -920,6 +920,7 @@ private struct LabelVoteSheet: View {
     @Binding var selectedLabel: MapLabelRecord?
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var mesh: BluetoothMeshService
+    @State private var addressString: String?
 
     var body: some View {
         NavigationStack {
@@ -927,6 +928,13 @@ private struct LabelVoteSheet: View {
                 Section {
                     Label(record.displayName, systemImage: record.category.systemImage)
                         .font(.headline)
+                    
+                    if let addr = addressString {
+                        Text(addr)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
                     if let data = mesh.thumbnails[record.id], let image = UIImage(data: data) {
                         Image(uiImage: image)
                             .resizable()
@@ -986,8 +994,19 @@ private struct LabelVoteSheet: View {
                     }
                 }
             }
-            .navigationTitle("Label")
+            .navigationTitle("Alert")
             .navigationBarTitleDisplayMode(.inline)
+            .task {
+                let geocoder = CLGeocoder()
+                let location = CLLocation(latitude: record.latitude, longitude: record.longitude)
+                if let placemarks = try? await geocoder.reverseGeocodeLocation(location), let p = placemarks.first {
+                    var parts: [String] = []
+                    if let n = p.name { parts.append(n) }
+                    if let t = p.thoroughfare { parts.append(t) }
+                    if let l = p.locality { parts.append(l) }
+                    addressString = parts.joined(separator: ", ")
+                }
+            }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     if canDelete {
