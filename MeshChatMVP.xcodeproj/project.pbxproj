@@ -311,7 +311,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 6VX7H735DM;
+				DEVELOPMENT_TEAM = 74YAK3G39Z;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = MeshChat;
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "MeshChat uses Bluetooth LE to discover nearby devices and relay messages.";
@@ -324,7 +324,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.jeremiahwebb.MeshChatMVP;
+				PRODUCT_BUNDLE_IDENTIFIER = com.ruohanchen.MeshChatMVP;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
@@ -338,7 +338,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 6VX7H735DM;
+				DEVELOPMENT_TEAM = 74YAK3G39Z;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = MeshChat;
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "MeshChat uses Bluetooth LE to discover nearby devices and relay messages.";
@@ -351,7 +351,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.jeremiahwebb.MeshChatMVP;
+				PRODUCT_BUNDLE_IDENTIFIER = com.ruohanchen.MeshChatMVP;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;

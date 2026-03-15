@@ -1,0 +1,1 @@
+story.articleBody.split is not a function. (In 'story.articleBody.split("\n\n")', 'story.articleBody.split' is undefined)

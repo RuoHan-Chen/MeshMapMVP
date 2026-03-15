@@ -1,0 +1,26 @@
+@import "tailwindcss";
+
+/* MeshNews: light, editorial (consumer-facing). No dark-mode flip for app shell. */
+:root {
+  --background: #ffffff;
+  --foreground: #1a1a1a;
+  --muted: #5c5c5c;
+  --border: #e5e5e5;
+  --accent: #c8102e;
+  --accent-hover: #a00d25;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-geist-sans), system-ui, -apple-system, "Segoe UI",
+    Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}

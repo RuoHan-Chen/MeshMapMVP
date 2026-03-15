@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>MeshMap Export — MeshNews source</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+    crossorigin=""
+  />
+  <style>
+    html, body, #map { height: 100%; margin: 0; padding: 0; }
+    .popup-img { max-width: 220px; display: block; margin-top: 4px; border-radius: 6px; }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-20nQCchB9co0qIJbrJ7CkJ8M5LQ8sET33Uz6DpGSo1A="
+    crossorigin=""></script>
+  <script>
+    (function(){
+    var b = "eyJtZW1iZXJzIjpbeyJuYW1lIjoiUGVlci04Y2E1MDYiLCJsb25naXR1ZGUiOjE1MS4yMzEwNDkzOTA5MzU3NCwibGF0aXR1ZGUiOi0zMy45MTg3Njg5Nzc2NTEwNDgsImlkIjoid29hcW9VZEtPSHRScThhUnUweXFZcjRoZmVSSzRVdWtXZmk2SEVoVGdYdyJ9XSwiZXhwb3J0ZXIiOiJQZWVyLThjYTUwNiIsImV2ZW50cyI6W3sibGF0aXR1ZGUiOi0zMy45MTcyNTY2MDY4NzYzMDgsIm5hbWUiOiJIZWxwIiwiaWQiOiI0MzVCRDY4RC03M0JDLTQzNjEtOTZFNC1CNkEyQTJGMDdEOTYiLCJpY29uIjoiY3Jvc3MuY2FzZS5maWxsIiwiZGF0ZSI6IjIwMjYtMDMtMTRUMTI6NDA6MDVaIiwiY2F0ZWdvcnkiOiJoZWxwIiwidGh1bWJuYWlsRGF0YVVSSSI6ImRhdGE6aW1hZ2VcL2pwZWc7YmFzZTY0LFwvOWpcLzRBQVFTa1pKUmdBQkFRQUFTQUJJQUFEXC80UUNBUlhocFpnQUFUVTBBS2dBQUFBZ0FCUUVTQUFNQUFBQUJBQUVBQUFFYUFBVUFBQUFCQUFBQVNnRWJBQVVBQUFBQkFBQUFVZ0VvQUFNQUFBQUJBQUlBQUlkcEFBUUFBQUFCQUFBQVdnQUFBQUFBQUFCSUFBQUFBUUFBQUVnQUFBQUJBQUtnQWdBRUFBQUFBUUFBQU1pZ0F3QUVBQUFBQVFBQUFCMEFBQUFBXC8rMEFPRkJvYjNSdmMyaHZjQ0F6TGpBQU9FSkpUUVFFQUFBQUFBQUFPRUpKVFFRbEFBQUFBQUFRMUIyTTJZOEFzZ1RwZ0FtWTdQaENmdlwvQUFCRUlBQjBBeUFNQklnQUNFUUVERVFIXC94QUFmQUFBQkJRRUJBUUVCQVFBQUFBQUFBQUFBQVFJREJBVUdCd2dKQ2d2XC94QUMxRUFBQ0FRTURBZ1FEQlFVRUJBQUFBWDBCQWdNQUJCRUZFaUV4UVFZVFVXRUhJbkVVTW9HUm9RZ2pRckhCRlZMUjhDUXpZbktDQ1FvV0Z4Z1pHaVVtSnlncEtqUTFOamM0T1RwRFJFVkdSMGhKU2xOVVZWWlhXRmxhWTJSbFptZG9hV3B6ZEhWMmQzaDVlb09FaFlhSGlJbUtrcE9VbFphWG1KbWFvcU9rcGFhbnFLbXFzck8wdGJhM3VMbTZ3c1BFeGNiSHlNbkswdFBVMWRiWDJObmE0ZUxqNU9YbTUranA2dkh5OFwvVDE5dmY0K2ZyXC94QUFmQVFBREFRRUJBUUVCQVFFQkFBQUFBQUFBQVFJREJBVUdCd2dKQ2d2XC94QUMxRVFBQ0FRSUVCQU1FQndVRUJBQUJBbmNBQVFJREVRUUZJVEVHRWtGUkIyRnhFeUl5Z1FnVVFwR2hzY0VKSXpOUzhCVmljdEVLRmlRMDRTWHhGeGdaR2lZbktDa3FOVFkzT0RrNlEwUkZSa2RJU1VwVFZGVldWMWhaV21Oa1pXWm5hR2xxYzNSMWRuZDRlWHFDZzRTRmhvZUlpWXFTazVTVmxwZVltWnFpbzZTbHBxZW9xYXF5czdTMXRyZTR1YnJDdzhURnhzZkl5Y3JTMDlUVjF0ZlkyZHJpNCtUbDV1Zm82ZXJ5OFwvVDE5dmY0K2ZyXC8yd0JEQUF3TURBd01EQlFNREJRZEZCUVVIU2NkSFIwZEp6RW5KeWNuSnpFN01URXhNVEV4T3pzN096czdPenRIUjBkSFIwZFRVMU5UVTExZFhWMWRYVjFkWFYzXC8yd0JEQVE0UER4Z1dHQ2dXRmloaFFqWkNZV0ZoWVdGaFlXRmhZV0ZoWVdGaFlXRmhZV0ZoWVdGaFlXRmhZV0ZoWVdGaFlXRmhZV0ZoWVdGaFlXRmhZV0ZoWVdIXC8zUUFFQUEzXC8yZ0FNQXdFQUFoRURFUUFcL0FMc1FCMUtmUHBuOUJXcFdaYlwvOGhHY1wvN0pcLzlsclR4VEpaR0lJUVwvbUJRRzlhbFlCbEtub2FQclNPb2RTcDZIMHBnTk1VYkg1dWNnajhEMXA0VkFmY0hQNTB3Umc4c2NuUEJcL1VmbFRna2E5ZmJyUUE4N053empQYW1iNGlkMjRaRlBLS3hETUFTT21hUExRakcwVUNGVmlRU2NBWklcL1hGTHUrYkNqUE9DZlNoVnh3ZVIxcHdVRHAzNW9BYjVxQVpZNEhPUHdwM21vUGZuSEZBMnFkdVBVXC9TbEpVWnoyR2FCaU5LRjZnNHppbkdUQktnRWtVbm1Md1BVWm9WaXdEbmc1d1JTQWQ1bkhBTk9Ma2RGUGI5YUdjcURoU2Fsb0dRcnVCTzQ1MituZk5PMzljREpIYjFwK0JuTkZBRVpkczhxYVVNYzlPTWo4YzArbEZJWTBPZG9iYWVhY0drQVB5NUk2WTR6VDgwNFVBUnE3NHlVUDBweWs1T1JqTlNDakE2MEFDWjgxY2RjR3A4djZEODZoVFBuTGowTldjTjZqOHFBUFwvMEw5cU0zOXdmVElcL1VWcTRyZ3JmeEo1ZHhOTDluenZQVGYwNStsWFI0c1wvNmR2OEF4XC84QSt4cGlPdWVNT0FEMm9TTUpuQkordGNuXC9BTUpiXC93Qk8zXC9qXC9BUDhBWTBmOEpiXC8wN2Y4QWpcLzhBOWpUdUk2cnlFeHQ3ZGg2VTh3Z25KNjR4K0Zjblwvd0FKYlwvMDZcL3dEalwvd0Q5alNcLzhKZFwvMDZcLzhBalwvOEE5alJjTEhXK1VNZzg1RlNCY0RGY2RcL3dsM1wvVHJcL3dDUFwvd0QyTkxcL3dsM1wvVHJcLzRcL1wvd0RZMFhDeDE3SVdHTTRwdms1QUJZbkhldVRcL0FPRXZcL3dDblhcL3hcL1wvd0N4b1wvNFNcL3dENmRmOEF4XC84QSt4b3VCMXl4NE9RZnJtcE52T2E0N1wvaE1QK25YXC93QWZcL3dEc2FQOEFoTVArblhcL3hcL3dEK3hvdUZqc0dkVUdXNG9iQUtnOUNhNDQrTGxQVzB6XC93UFwvd0N4cGY4QWhNQjN0UDhBeFwvOEEreHBBZHJ6bmJqdFRZMkxBXC9XdU9cL3dDRXhcLzZkZlwvSW5cL3dCalNcLzhBQ1lqT2ZzblwvQUpFXC8reG9HZHBpakZjWlwvd21YXC9BRTZmK1JQXC9BTEdrXC93Q0V5XC82ZFBcL0luXC93QmpTQTdYRktCWEVcLzhBQ1pmOU9uXC9rVFwvN0dsXC80VExcL3AwXC93REluXC8yTkF6dDhVdUs0ZlwvaE12K25UXC93QWlmXC9ZMGY4Sm5cL3dCT25cL2tUXC93Q3hvQTdrVXRjTlwvd0FKblwvMDZmK1JQXC9zYVArRXpcL0FPblRcL3dBaWZcL1kwQWQwbk02alwvQUdUVmpaXC90R3ZQQjR5SG1CamFad0NNZVpcLzhBWTFMXC9BTUpvblwvUGtQK1wvblwvd0JqUUJcL1wvMlE9PSIsImxvbmdpdHVkZSI6MTUxLjIyNzYwMzY5MjcxMTcxfV0sImV4cG9ydERhdGUiOiIyMDI2LTAzLTE0VDEyOjQwOjA3WiJ9";
+    var s = b.replace(/-/g,'+').replace(/_/g,'/');
+    var data = JSON.parse(atob(s));
+    const map = L.map('map');
+    let bounds;
+
+    function extendBounds(lat, lon) {
+      if (!bounds) {
+        bounds = L.latLngBounds([lat, lon], [lat, lon]);
+      } else {
+        bounds.extend([lat, lon]);
+      }
+    }
+
+    (data.members || []).forEach(m => {
+      const marker = L.marker([m.latitude, m.longitude]).addTo(map);
+      marker.bindPopup(`<strong>Member</strong><br/>${m.name}`);
+      extendBounds(m.latitude, m.longitude);
+    });
+
+    (data.events || []).forEach(e => {
+      let html = `<strong>${e.name || e.category}</strong>`;
+      if (e.category) {
+        html += `<br/><em>${e.category}</em>`;
+      }
+      if (e.description) {
+        html += `<br/>${e.description}`;
+      }
+      if (e.thumbnailDataURI) {
+        html += `<br/><img class="popup-img" src="${e.thumbnailDataURI}" alt="photo" />`;
+      }
+      if (e.date) {
+        html += `<br/><small>${e.date}</small>`;
+      }
+      const marker = L.marker([e.latitude, e.longitude]).addTo(map);
+      marker.bindPopup(html);
+      extendBounds(e.latitude, e.longitude);
+    });
+
+    if (bounds) {
+      map.fitBounds(bounds.pad(0.2));
+    } else {
+      map.setView([0, 0], 2);
+    }
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+    })();
+  </script>
+</body>
+</html>

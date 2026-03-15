@@ -1,0 +1,40 @@
+{
+  "export": {
+    "id": "exp_01JKEXAMPLE",
+    "createdAt": "2025-03-14T12:00:00Z",
+    "crs": "EPSG:4326",
+    "featureCollection": {
+      "type": "FeatureCollection",
+      "features": [
+        {
+          "type": "Feature",
+          "id": "label-uuid-1",
+          "geometry": {
+            "type": "Point",
+            "coordinates": [151.2093, -33.8688]
+          },
+          "properties": {
+            "kind": "map_label",
+            "category": "hazard",
+            "title": "Road closed",
+            "description": "Flooding",
+            "createdAt": "2025-03-14T11:00:00Z",
+            "senderId": "mesh_pubkey_fingerprint_or_id",
+            "senderName": "Alice",
+            "confidence": 0.72,
+            "upVotes": 4,
+            "downVotes": 1,
+            "image": {
+              "present": true,
+              "mimeType": "image/jpeg",
+              "url": "https://placehold.co/400x300/jpeg?text=Mesh",
+              "sha256": "abc123",
+              "width": 200,
+              "height": 150
+            }
+          }
+        }
+      ]
+    }
+  }
+}
