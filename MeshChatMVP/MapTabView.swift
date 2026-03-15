@@ -190,198 +190,16 @@ struct MapTabView: View {
         NavigationStack {
             ZStack(alignment: .top) {
                 if combinedAnnotations.isEmpty {
-                    Map(coordinateRegion: $region)
-                        .ignoresSafeArea(edges: .all)
-                    VStack(spacing: 8) {
-                        Text("No positions or labels yet")
-                            .font(.headline)
-                        Text("Turn on \"Share location\" in Account to show your position. Tap \"+\" to place an incident label.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .multilineTextAlignment(.center)
-                            .padding(.horizontal)
-                    }
-                    .padding(.top, 60)
+                    emptyMapState
                 } else {
-                    Map(coordinateRegion: $region, annotationItems: combinedAnnotations) { item in
-                        MapAnnotation(coordinate: item.coordinate) {
-                            switch item {
-                            case .transmitter(let p):
-                                if p.isCurrentUser {
-                                    ZStack {
-                                        // Direction beam (if available)
-                                        if let heading = headingProvider.headingDegrees {
-                                            Circle()
-                                                .fill(
-                                                    AngularGradient(
-                                                        gradient: Gradient(colors: [.blue.opacity(0.3), .clear]),
-                                                        center: .center,
-                                                        startAngle: .degrees(0),
-                                                        endAngle: .degrees(60)
-                                                    )
-                                                )
-                                                .frame(width: 80, height: 80)
-                                                .rotationEffect(.degrees(heading - 90 - 30)) // Adjust for gradient start
-                                        }
-                                        
-                                        // Outer glow/shadow
-                                        Circle()
-                                            .fill(Color.blue.opacity(0.2))
-                                            .frame(width: 24, height: 24)
-                                        
-                                        // White border
-                                        Circle()
-                                            .fill(Color.white)
-                                            .frame(width: 18, height: 18)
-                                        
-                                        // Blue center
-                                        Circle()
-                                            .fill(Color.blue)
-                                            .frame(width: 14, height: 14)
-                                    }
-                                    .scaleEffect(annotationScale)
-                                    .animation(.easeInOut, value: annotationScale)
-                                } else {
-                                    VStack(spacing: 2) {
-                                        Image(systemName: "antenna.radiowaves.left.and.right")
-                                            .font(.title)
-                                            .foregroundStyle(.orange)
-                                        if showAnnotationText {
-                                            Text(p.displayName)
-                                                .font(.caption2)
-                                                .lineLimit(1)
-                                        }
-                                    }
-                                    .padding(6)
-                                    .background(showAnnotationText ? .background : .clear, in: RoundedRectangle(cornerRadius: 8))
-                                    .scaleEffect(annotationScale)
-                                    .animation(.easeInOut, value: annotationScale)
-                                }
-                            case .labelCluster(let cluster):
-                                let sorted = cluster.records.sorted { $0.trustScore > $1.trustScore }
-                                let top = sorted.first!
-                                Button {
-                                    if sorted.count == 1 {
-                                        selectedLabel = top
-                                    } else {
-                                        selectedCluster = cluster
-                                    }
-                                } label: {
-                                    VStack(spacing: 2) {
-                                        Image(systemName: top.systemImage)
-                                            .font(.title) // Increased size
-                                            .foregroundStyle(eventColor(for: top))
-                                        if showAnnotationText {
-                                            Text(top.displayName)
-                                                .font(.caption2)
-                                                .lineLimit(1)
-                                                .multilineTextAlignment(.center)
-                                            Text(top.voteCount == 0 ? "\(sorted.count) events · Unverified" : "\(sorted.count) events · score \(String(format: "%.1f", top.trustScore))")
-                                                .font(.caption2)
-                                                .foregroundStyle(.secondary)
-                                        }
-                                    }
-                                    .padding(6)
-                                    .background(showAnnotationText ? .background : .clear, in: RoundedRectangle(cornerRadius: 8))
-                                    .scaleEffect(annotationScale)
-                                    .animation(.easeInOut, value: annotationScale)
-                                }
-                                .buttonStyle(.plain)
-                            }
-                        }
-                    }
-                    .ignoresSafeArea(edges: .all)
-                    .onAppear {
-                        fitRegionToAnnotations()
-                        loadTrustData()
-                    }
-                    // Disabled auto-fit on change to prevent zoom loop
-                    // .onChange(of: mesh.senderCoordinates.count) { _ in fitRegionToAnnotations() }
-                    // .onChange(of: mesh.identity.shareLocation) { _ in fitRegionToAnnotations() }
-                    .onChange(of: mesh.mapLabels.count) { _ in
-                        loadTrustData()
-                    }
+                    mapWithAnnotations
                 }
 
                 // Top Right Controls: SOS + Share
-                VStack {
-                    HStack {
-                        Spacer()
-                        Button {
-                            showSOSAlert = true
-                        } label: {
-                            Text("SOS")
-                                .font(.subheadline.weight(.bold))
-                                .foregroundStyle(.white)
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 6)
-                                .background(.red, in: RoundedRectangle(cornerRadius: 8))
-                        }
-                        .buttonStyle(.plain)
-                        
-                        Button {
-                            prepareAndShareMap()
-                        } label: {
-                            Image(systemName: "square.and.arrow.up")
-                                .font(.body)
-                                .padding(8)
-                                .background(.ultraThinMaterial, in: Circle())
-                        }
-                        .help("Share map with outside world (events + member locations)")
-                    }
-                    .padding(.horizontal)
-                    .padding(.top, 8)
-                    Spacer()
-                }
+                topRightControls
                 
                 // Bottom Right Controls: Add Label (+) + Recenter (Location Arrow)
-                VStack {
-                    Spacer()
-                    HStack {
-                        Spacer()
-                        VStack(spacing: 16) {
-                            Button {
-                                if mesh.mapLabelCooldownRemaining > 0 {
-                                    showCooldownAlert = true
-                                } else if !isWithinPlacementRange(region.center) {
-                                    showTooFarAlert = true
-                                } else {
-                                    showAddLabelSheet = true
-                                }
-                            } label: {
-                                ZStack {
-                                    Circle()
-                                        .fill(Color.blue)
-                                        .frame(width: 56, height: 56)
-                                        .shadow(radius: 4)
-                                    if mesh.mapLabelCooldownRemaining > 0 {
-                                        Text("\(Int(ceil(mesh.mapLabelCooldownRemaining)))")
-                                            .font(.caption.monospacedDigit().bold())
-                                            .foregroundStyle(.white)
-                                    } else {
-                                        Image(systemName: "plus")
-                                            .font(.title.weight(.semibold))
-                                            .foregroundStyle(.white)
-                                    }
-                                }
-                            }
-                            .disabled(mesh.mapLabelCooldownRemaining > 0)
-                            
-                            Button {
-                                recenterMap()
-                            } label: {
-                                Image(systemName: "location.fill")
-                                    .font(.title2)
-                                    .padding(12)
-                                    .background(.ultraThinMaterial, in: Circle())
-                                    .shadow(radius: 2)
-                            }
-                            .help("Recenter map on your location")
-                        }
-                        .padding(.trailing, 16)
-                        .padding(.bottom, 20) // Lift up from tab bar
-                    }
-                }
+                bottomRightControls
             }
             .navigationTitle("")
             .toolbar(.hidden, for: .navigationBar)
@@ -452,6 +270,206 @@ struct MapTabView: View {
                     },
                     selectedCluster: $selectedCluster
                 )
+            }
+        }
+    }
+
+    private var emptyMapState: some View {
+        ZStack(alignment: .top) {
+            Map(coordinateRegion: $region)
+                .ignoresSafeArea(edges: .all)
+            VStack(spacing: 8) {
+                Text("No positions or labels yet")
+                    .font(.headline)
+                Text("Turn on \"Share location\" in Account to show your position. Tap \"+\" to place an incident label.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal)
+            }
+            .padding(.top, 60)
+        }
+    }
+
+    private var mapWithAnnotations: some View {
+        Map(coordinateRegion: $region, annotationItems: combinedAnnotations) { item in
+            MapAnnotation(coordinate: item.coordinate) {
+                switch item {
+                case .transmitter(let p):
+                    if p.isCurrentUser {
+                        ZStack {
+                            // Direction beam (if available)
+                            if let heading = headingProvider.headingDegrees {
+                                Circle()
+                                    .fill(
+                                        AngularGradient(
+                                            gradient: Gradient(colors: [.blue.opacity(0.3), .clear]),
+                                            center: .center,
+                                            startAngle: .degrees(0),
+                                            endAngle: .degrees(60)
+                                        )
+                                    )
+                                    .frame(width: 80, height: 80)
+                                    .rotationEffect(.degrees(heading - 90 - 30)) // Adjust for gradient start
+                            }
+                            
+                            // Outer glow/shadow
+                            Circle()
+                                .fill(Color.blue.opacity(0.2))
+                                .frame(width: 24, height: 24)
+                            
+                            // White border
+                            Circle()
+                                .fill(Color.white)
+                                .frame(width: 18, height: 18)
+                            
+                            // Blue center
+                            Circle()
+                                .fill(Color.blue)
+                                .frame(width: 14, height: 14)
+                        }
+                        .scaleEffect(annotationScale)
+                        .animation(.easeInOut, value: annotationScale)
+                    } else {
+                        VStack(spacing: 2) {
+                            Image(systemName: "antenna.radiowaves.left.and.right")
+                                .font(.title)
+                                .foregroundStyle(.orange)
+                            if showAnnotationText {
+                                Text(p.displayName)
+                                    .font(.caption2)
+                                    .lineLimit(1)
+                            }
+                        }
+                        .padding(6)
+                        .background(showAnnotationText ? .background : .clear, in: RoundedRectangle(cornerRadius: 8))
+                        .scaleEffect(annotationScale)
+                        .animation(.easeInOut, value: annotationScale)
+                    }
+                case .labelCluster(let cluster):
+                    let sorted = cluster.records.sorted { $0.trustScore > $1.trustScore }
+                    let top = sorted.first!
+                    Button {
+                        if sorted.count == 1 {
+                            selectedLabel = top
+                        } else {
+                            selectedCluster = cluster
+                        }
+                    } label: {
+                        VStack(spacing: 2) {
+                            Image(systemName: top.systemImage)
+                                .font(.title) // Increased size
+                                .foregroundStyle(eventColor(for: top))
+                            if showAnnotationText {
+                                Text(top.displayName)
+                                    .font(.caption2)
+                                    .lineLimit(1)
+                                    .multilineTextAlignment(.center)
+                                Text(top.voteCount == 0 ? "\(sorted.count) events · Unverified" : "\(sorted.count) events · score \(String(format: "%.1f", top.trustScore))")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        .padding(6)
+                        .background(showAnnotationText ? .background : .clear, in: RoundedRectangle(cornerRadius: 8))
+                        .scaleEffect(annotationScale)
+                        .animation(.easeInOut, value: annotationScale)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+        .ignoresSafeArea(edges: .all)
+        .onAppear {
+            fitRegionToAnnotations()
+            loadTrustData()
+        }
+        // Disabled auto-fit on change to prevent zoom loop
+        // .onChange(of: mesh.senderCoordinates.count) { _ in fitRegionToAnnotations() }
+        // .onChange(of: mesh.identity.shareLocation) { _ in fitRegionToAnnotations() }
+        .onChange(of: mesh.mapLabels.count) { _ in
+            loadTrustData()
+        }
+    }
+
+    private var topRightControls: some View {
+        VStack {
+            HStack {
+                Spacer()
+                Button {
+                    showSOSAlert = true
+                } label: {
+                    Text("SOS")
+                        .font(.subheadline.weight(.bold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(.red, in: RoundedRectangle(cornerRadius: 8))
+                }
+                .buttonStyle(.plain)
+                
+                Button {
+                    prepareAndShareMap()
+                } label: {
+                    Image(systemName: "square.and.arrow.up")
+                        .font(.body)
+                        .padding(8)
+                        .background(.ultraThinMaterial, in: Circle())
+                }
+                .help("Share map with outside world (events + member locations)")
+            }
+            .padding(.horizontal)
+            .padding(.top, 8)
+            Spacer()
+        }
+    }
+
+    private var bottomRightControls: some View {
+        VStack {
+            Spacer()
+            HStack {
+                Spacer()
+                VStack(spacing: 16) {
+                    Button {
+                        if mesh.mapLabelCooldownRemaining > 0 {
+                            showCooldownAlert = true
+                        } else if !isWithinPlacementRange(region.center) {
+                            showTooFarAlert = true
+                        } else {
+                            showAddLabelSheet = true
+                        }
+                    } label: {
+                        ZStack {
+                            Circle()
+                                .fill(Color.blue)
+                                .frame(width: 56, height: 56)
+                                .shadow(radius: 4)
+                            if mesh.mapLabelCooldownRemaining > 0 {
+                                Text("\(Int(ceil(mesh.mapLabelCooldownRemaining)))")
+                                    .font(.caption.monospacedDigit().bold())
+                                    .foregroundStyle(.white)
+                            } else {
+                                Image(systemName: "plus")
+                                    .font(.title.weight(.semibold))
+                                    .foregroundStyle(.white)
+                            }
+                        }
+                    }
+                    .disabled(mesh.mapLabelCooldownRemaining > 0)
+                    
+                    Button {
+                        recenterMap()
+                    } label: {
+                        Image(systemName: "location.fill")
+                            .font(.title2)
+                            .padding(12)
+                            .background(.ultraThinMaterial, in: Circle())
+                            .shadow(radius: 2)
+                    }
+                    .help("Recenter map on your location")
+                }
+                .padding(.trailing, 16)
+                .padding(.bottom, 20) // Lift up from tab bar
             }
         }
     }
