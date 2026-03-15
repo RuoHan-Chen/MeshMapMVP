@@ -177,8 +177,9 @@ struct MapTabView: View {
     private var annotationScale: CGFloat {
         let span = region.span.latitudeDelta
         // Base span ~0.01 -> scale 1.0
-        // Zoomed out -> scale down to ~0.4
-        return max(0.4, min(1.2, 0.015 / span))
+        // Zoomed out -> scale down to ~0.7 (was 0.4)
+        // Zoomed in -> cap at 1.0 (was 1.2) to avoid taking up too much screen
+        return max(0.7, min(1.0, 0.02 / span))
     }
 
     /// Whether to show text labels for annotations based on zoom level.
