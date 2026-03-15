@@ -8,19 +8,12 @@ import UIKit
 /// Reads only from mesh.lastKnownLocation, mesh.senderCoordinates, mesh.announceNicknames, mesh.identity.
 struct MapTabView: View {
     @EnvironmentObject var mesh: BluetoothMeshService
-    @StateObject private var headingProvider = LocationHeadingProvider()
     @StateObject private var eventTypesManager = EventTypesManager()
 
-    private static let defaultCenter = CLLocationCoordinate2D(latitude: -33.8688, longitude: 151.2093)
-    private static let defaultSpan = MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
     private static let maxLabelDistanceMeters = 5_000.0
 
-    @State private var region = MKCoordinateRegion(
-        center: defaultCenter,
-        span: defaultSpan
-    )
-    @State private var showOfflineInfo = false
-    @State private var isCaching = false
+    @Binding var region: MKCoordinateRegion
+    
     @State private var showAddLabelSheet = false
     @State private var showCooldownAlert = false
     @State private var showTooFarAlert = false
@@ -196,7 +189,7 @@ struct MapTabView: View {
                     VStack(spacing: 8) {
                         Text("No positions or labels yet")
                             .font(.headline)
-                        Text("Turn on \"Share location\" to show your position. Tap \"Add label\" to place an incident label; others can vote on validity.")
+                        Text("Turn on \"Share location\" in Account to show your position. Tap \"+\" to place an incident label.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .multilineTextAlignment(.center)
@@ -256,69 +249,18 @@ struct MapTabView: View {
                         fitRegionToAnnotations()
                         loadTrustData()
                     }
-                    .onChange(of: mesh.senderCoordinates.count) { _ in fitRegionToAnnotations() }
-                    .onChange(of: mesh.identity.shareLocation) { _ in fitRegionToAnnotations() }
+                    // Disabled auto-fit on change to prevent zoom loop
+                    // .onChange(of: mesh.senderCoordinates.count) { _ in fitRegionToAnnotations() }
+                    // .onChange(of: mesh.identity.shareLocation) { _ in fitRegionToAnnotations() }
                     .onChange(of: mesh.mapLabels.count) { _ in
-                        fitRegionToAnnotations()
                         loadTrustData()
                     }
                 }
 
-                // Compass: direction the user is pointed (magnetic heading)
-                if let heading = headingProvider.headingDegrees {
-                    VStack {
-                        Spacer()
-                        HStack {
-                            Spacer()
-                            CompassView(headingDegrees: heading)
-                                .padding(.trailing, 16)
-                                .padding(.bottom, 100)
-                        }
-                    }
-                    .allowsHitTesting(false)
-                }
-
-                // Top controls: share toggle + offline + add label + recenter
-                VStack(spacing: 12) {
+                // Top Right Controls: SOS + Share
+                VStack {
                     HStack {
-                        Toggle(isOn: shareLocationBinding) {
-                            Label("Share location", systemImage: "location.fill")
-                                .font(.subheadline.weight(.medium))
-                        }
-                        .toggleStyle(.button)
-                        .tint(.accentColor)
                         Spacer()
-                        Button {
-                            recenterMap()
-                        } label: {
-                            Image(systemName: "location.circle.fill")
-                                .font(.body)
-                        }
-                        .help("Recenter map on your location")
-                        Button {
-                            if mesh.mapLabelCooldownRemaining > 0 {
-                                showCooldownAlert = true
-                            } else if !isWithinPlacementRange(region.center) {
-                                showTooFarAlert = true
-                            } else {
-                                showAddLabelSheet = true
-                            }
-                        } label: {
-                            if mesh.mapLabelCooldownRemaining > 0 {
-                                Text("\(Int(ceil(mesh.mapLabelCooldownRemaining)))s")
-                                    .font(.caption.monospacedDigit())
-                            } else {
-                                Image(systemName: "mappin.circle.fill")
-                                    .font(.body)
-                            }
-                        }
-                        .disabled(mesh.mapLabelCooldownRemaining > 0)
-                        Button {
-                            showOfflineInfo = true
-                        } label: {
-                            Image(systemName: "map.fill")
-                                .font(.body)
-                        }
                         Button {
                             showSOSAlert = true
                         } label: {
@@ -330,19 +272,69 @@ struct MapTabView: View {
                                 .background(.red, in: RoundedRectangle(cornerRadius: 8))
                         }
                         .buttonStyle(.plain)
+                        
                         Button {
                             prepareAndShareMap()
                         } label: {
                             Image(systemName: "square.and.arrow.up")
                                 .font(.body)
+                                .padding(8)
+                                .background(.ultraThinMaterial, in: Circle())
                         }
                         .help("Share map with outside world (events + member locations)")
                     }
-                    .padding(10)
-                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10))
                     .padding(.horizontal)
                     .padding(.top, 8)
                     Spacer()
+                }
+                
+                // Bottom Right Controls: Add Label (+) + Recenter (Location Arrow)
+                VStack {
+                    Spacer()
+                    HStack {
+                        Spacer()
+                        VStack(spacing: 16) {
+                            Button {
+                                if mesh.mapLabelCooldownRemaining > 0 {
+                                    showCooldownAlert = true
+                                } else if !isWithinPlacementRange(region.center) {
+                                    showTooFarAlert = true
+                                } else {
+                                    showAddLabelSheet = true
+                                }
+                            } label: {
+                                ZStack {
+                                    Circle()
+                                        .fill(Color.blue)
+                                        .frame(width: 56, height: 56)
+                                        .shadow(radius: 4)
+                                    if mesh.mapLabelCooldownRemaining > 0 {
+                                        Text("\(Int(ceil(mesh.mapLabelCooldownRemaining)))")
+                                            .font(.caption.monospacedDigit().bold())
+                                            .foregroundStyle(.white)
+                                    } else {
+                                        Image(systemName: "plus")
+                                            .font(.title.weight(.semibold))
+                                            .foregroundStyle(.white)
+                                    }
+                                }
+                            }
+                            .disabled(mesh.mapLabelCooldownRemaining > 0)
+                            
+                            Button {
+                                recenterMap()
+                            } label: {
+                                Image(systemName: "location.fill")
+                                    .font(.title2)
+                                    .padding(12)
+                                    .background(.ultraThinMaterial, in: Circle())
+                                    .shadow(radius: 2)
+                            }
+                            .help("Recenter map on your location")
+                        }
+                        .padding(.trailing, 16)
+                        .padding(.bottom, 20) // Lift up from tab bar
+                    }
                 }
             }
             .navigationTitle("")
@@ -363,9 +355,6 @@ struct MapTabView: View {
                 Button("Yes", role: .destructive) {}
             } message: {
                 Text("Dummy SOS button for prototype only. This does not call emergency services.")
-            }
-            .sheet(isPresented: $showOfflineInfo) {
-                OfflineMapSheet(isCaching: $isCaching, region: region, onCache: cacheCurrentRegion)
             }
             .sheet(isPresented: $showAddLabelSheet) {
                 AddLabelSheet(regionCenter: region.center, eventTypesConfig: eventTypesManager.config) { category, customName, customDescription, iconName, thumbnailData in
@@ -421,31 +410,6 @@ struct MapTabView: View {
         }
     }
 
-    /// Binding that updates identity via existing updateIdentity (no change to identity logic).
-    private var shareLocationBinding: Binding<Bool> {
-        Binding(
-            get: { mesh.identity.shareLocation },
-            set: { newValue in
-                var id = mesh.identity
-                id.shareLocation = newValue
-                mesh.updateIdentity(id)
-            }
-        )
-    }
-
-    /// Preload/cache current map region for better offline use (MapKit caches tiles when rendered).
-    private func cacheCurrentRegion() {
-        guard !isCaching else { return }
-        isCaching = true
-        let options = MKMapSnapshotter.Options()
-        options.region = region
-        options.size = CGSize(width: 512, height: 512)
-        let snapshotter = MKMapSnapshotter(options: options)
-        snapshotter.start { [self] _, _ in
-            DispatchQueue.main.async { isCaching = false }
-        }
-    }
-
     private func fitRegionToAnnotations() {
         guard !combinedAnnotations.isEmpty else { return }
         let coords = combinedAnnotations.map(\.coordinate)
@@ -471,7 +435,7 @@ struct MapTabView: View {
         if let my = mesh.lastKnownLocation {
             region = MKCoordinateRegion(
                 center: CLLocationCoordinate2D(latitude: my.lat, longitude: my.lon),
-                span: Self.defaultSpan
+                span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
             )
         } else {
             fitRegionToAnnotations()
@@ -752,33 +716,6 @@ private struct MapExport: Codable {
     let events: [MapExportEvent]
 }
 
-// MARK: - Compass (direction user is pointed)
-
-/// Shows device heading: arrow points in the direction the user is facing (0° = North).
-private struct CompassView: View {
-    let headingDegrees: Double
-    var body: some View {
-        ZStack {
-            Circle()
-                .fill(.ultraThinMaterial)
-                .frame(width: 56, height: 56)
-            // Arrow points upward when facing North; rotate so North is at top
-            Image(systemName: "location.north.fill")
-                .font(.title)
-                .foregroundStyle(.blue)
-                .rotationEffect(.degrees(-headingDegrees))
-            Circle()
-                .strokeBorder(.secondary, lineWidth: 1)
-                .frame(width: 56, height: 56)
-        }
-        .overlay(alignment: .top) {
-            Text("N")
-                .font(.system(size: 10, weight: .bold))
-                .offset(y: -28)
-        }
-    }
-}
-
 // MARK: - Device heading provider (no change to mesh; map-only)
 
 /// Provides device magnetic heading for compass. Uses its own CLLocationManager for heading only.
@@ -894,7 +831,7 @@ private struct AddLabelSheet: View {
                     }
                     Section("Description (optional)") {
                         TextField("Description", text: $customDescription, axis: .vertical)
-                            .lineLimit(2...4)
+                        .lineLimit(2...4)
                     }
                     Section("Photo (optional)") {
                         VStack(alignment: .leading, spacing: 8) {
@@ -983,6 +920,7 @@ private struct LabelVoteSheet: View {
     @Binding var selectedLabel: MapLabelRecord?
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var mesh: BluetoothMeshService
+    @State private var addressString: String?
 
     var body: some View {
         NavigationStack {
@@ -990,6 +928,13 @@ private struct LabelVoteSheet: View {
                 Section {
                     Label(record.displayName, systemImage: record.category.systemImage)
                         .font(.headline)
+                    
+                    if let addr = addressString {
+                        Text(addr)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
                     if let data = mesh.thumbnails[record.id], let image = UIImage(data: data) {
                         Image(uiImage: image)
                             .resizable()
@@ -1049,8 +994,19 @@ private struct LabelVoteSheet: View {
                     }
                 }
             }
-            .navigationTitle("Label")
+            .navigationTitle("Alert")
             .navigationBarTitleDisplayMode(.inline)
+            .task {
+                let geocoder = CLGeocoder()
+                let location = CLLocation(latitude: record.latitude, longitude: record.longitude)
+                if let placemarks = try? await geocoder.reverseGeocodeLocation(location), let p = placemarks.first {
+                    var parts: [String] = []
+                    if let n = p.name { parts.append(n) }
+                    if let t = p.thoroughfare { parts.append(t) }
+                    if let l = p.locality { parts.append(l) }
+                    addressString = parts.joined(separator: ", ")
+                }
+            }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     if canDelete {
@@ -1139,49 +1095,7 @@ private struct ClusterListSheet: View {
     }
 }
 
-// MARK: - Offline map info & cache
-
-private struct OfflineMapSheet: View {
-    @Binding var isCaching: Bool
-    let region: MKCoordinateRegion
-    let onCache: () -> Void
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        NavigationStack {
-            List {
-                Section {
-                    Text("Map tiles are cached as you pan and zoom. To preload the current area, tap below. For full offline use, download regions in the Apple Maps app: Settings → Maps → turn on Offline, or open Maps and download areas before going offline.")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-                Section("This area") {
-                    Button {
-                        onCache()
-                    } label: {
-                        HStack {
-                            Label("Cache current map area", systemImage: "square.and.arrow.down")
-                            if isCaching {
-                                Spacer()
-                                ProgressView()
-                            }
-                        }
-                    }
-                    .disabled(isCaching)
-                }
-            }
-            .navigationTitle("Offline maps")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }
-                }
-            }
-        }
-    }
-}
-
 #Preview {
-    MapTabView()
+    ContentView()
         .environmentObject(BluetoothMeshService())
 }
