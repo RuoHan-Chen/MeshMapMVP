@@ -12,4 +12,6 @@ enum MessageType: UInt8, Codable, CaseIterable {
     case vouch = 8
     /// Thumbnail chunks for map labels (distinct from chat imageChunk).
     case mapLabelImageChunk = 9
+    /// Signed offline payment transport payload (app-level signing). No chain settlement yet.
+    case offlinePayment = 10
 }

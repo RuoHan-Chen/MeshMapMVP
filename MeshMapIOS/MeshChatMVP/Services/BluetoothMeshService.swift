@@ -85,6 +85,9 @@ final class BluetoothMeshService: NSObject, ObservableObject {
     @Published private(set) var contactActivityRevision = 0
     private static let contactActivityDefaultsKey = "meshchat.contactActivity.v1"
 
+    /// Bumps when payment persistence changes (used by Wallet tab to reload rows).
+    @Published private(set) var paymentActivityRevision = 0
+
     var contactUnreadTotal: Int { contactActivity.values.reduce(0) { $0 + $1.unread } }
 
     func activity(forPeerID peerID: String) -> ContactActivityState? { contactActivity[peerID] }
@@ -895,6 +898,196 @@ final class BluetoothMeshService: NSObject, ObservableObject {
         log("Vouch sent: alertID=\(alertID) value=\(value)")
     }
 
+    // MARK: - Offline mesh payments (scaffold only; no on-chain settlement yet)
+
+    func sendOfflinePayment(draft: OfflinePaymentDraft) async throws {
+        // TODO: real settlement + escrow/program integration. This wave only persists pending state.
+        // Keep payload size bounded for the 512B mesh envelope cap.
+        let senderName = String(identity.nickname.prefix(32))
+        let recipientName = String(draft.recipientNickname.prefix(32))
+        let memo = draft.memo?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let safeMemo = memo?.isEmpty == true ? nil : memo
+
+        guard draft.asset.assetType == .nativeSol else {
+            throw NSError(domain: "BluetoothMeshService", code: -1, userInfo: [NSLocalizedDescriptionKey: "Only SOL is supported in this wave"])
+        }
+
+        let payloadVersion = 1
+
+        let signingData = OfflinePaymentSigningData(
+            paymentID: draft.id,
+            senderDeviceID: identity.deviceID,
+            senderName: senderName,
+            recipientDeviceID: draft.recipientDeviceID,
+            recipientName: recipientName,
+            amountLamports: draft.amountLamports,
+            assetSymbol: draft.asset.symbol,
+            createdAt: draft.createdAt,
+            memo: safeMemo,
+            payloadVersion: payloadVersion
+        )
+
+        guard let signingBytes = try? JSONEncoder().encode(signingData) else {
+            throw NSError(domain: "BluetoothMeshService", code: -2, userInfo: [NSLocalizedDescriptionKey: "Signing data encode failed"])
+        }
+
+        let paymentPublicKeyB64 = PaymentKeyManager.paymentPublicKeyBase64()
+        guard !paymentPublicKeyB64.isEmpty, let paymentPublicKey = Data(base64Encoded: paymentPublicKeyB64) else {
+            throw NSError(domain: "BluetoothMeshService", code: -3, userInfo: [NSLocalizedDescriptionKey: "Payment public key missing"])
+        }
+
+        let signature = try PaymentKeyManager.signPaymentPayload(data: signingBytes)
+
+        let payload = OfflinePaymentPayload(
+            paymentID: draft.id,
+            senderDeviceID: identity.deviceID,
+            senderName: senderName,
+            recipientDeviceID: draft.recipientDeviceID,
+            recipientName: recipientName,
+            amountLamports: draft.amountLamports,
+            assetSymbol: draft.asset.symbol,
+            createdAt: draft.createdAt,
+            memo: safeMemo,
+            paymentPublicKeyBase64: paymentPublicKeyB64,
+            paymentSignatureBase64: signature.base64EncodedString(),
+            payloadVersion: payloadVersion
+        )
+
+        guard let payloadData = try? JSONEncoder().encode(payload) else {
+            throw NSError(domain: "BluetoothMeshService", code: -4, userInfo: [NSLocalizedDescriptionKey: "Offline payment payload encode failed"])
+        }
+
+        var env = MeshEnvelope(
+            id: UUID(),
+            type: .offlinePayment,
+            senderID: identity.deviceID,
+            senderName: identity.nickname,
+            timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+            ttl: defaultTTL,
+            payload: payloadData,
+            senderLatitude: nil,
+            senderLongitude: nil
+        )
+
+        guard let envBytes = MeshEnvelope.encodeJSON(env), envBytes.count <= 512 else {
+            throw NSError(domain: "BluetoothMeshService", code: -5, userInfo: [NSLocalizedDescriptionKey: "Offline payment envelope too large for mesh"])
+        }
+
+        let payment = PendingPayment(
+            id: draft.id,
+            direction: .outbound,
+            senderDeviceID: identity.deviceID,
+            senderName: senderName,
+            recipientDeviceID: draft.recipientDeviceID,
+            recipientName: recipientName,
+            amountLamports: draft.amountLamports,
+            asset: draft.asset,
+            createdAt: draft.createdAt,
+            receivedAt: nil,
+            status: .queuedOutbound,
+            paymentPayloadVersion: payloadVersion,
+            paymentSignature: signature,
+            paymentPublicKey: paymentPublicKey,
+            memo: safeMemo,
+            meshEnvelopeID: env.id.uuidString,
+            settlementReference: nil,
+            expiresAt: draft.expiresAt,
+            backendReceiptID: nil,
+            transactionSignature: nil,
+            settledAt: nil,
+            failureReason: nil,
+            conflictReason: nil,
+            canonicalSequence: nil,
+            lastSubmissionAttemptAt: nil,
+            attemptCount: nil,
+            nextRetryAt: nil,
+            lastErrorSummary: nil
+        )
+
+        // Persist locally before broadcasting so the sender immediately sees a pending row.
+        try DatabaseManager.shared.insertOutboundPendingPayment(payment)
+        DispatchQueue.main.async { [weak self] in self?.paymentActivityRevision += 1 }
+
+        let envCopy = env
+        bleQueue.async { [weak self] in
+            guard let self else { return }
+            _ = self.markSeen(envCopy.id)
+            let ok = self.broadcastEnvelope(envCopy, excludeCentral: nil, excludePeripheral: nil)
+            do {
+                let next: PaymentPhase = ok ? .sentOverMesh : .failed
+                try self.updatePaymentStatusOnDB(paymentID: draft.id, direction: .outbound, status: next)
+            } catch {
+                // TODO: surface payment persistence failures to UI
+            }
+            DispatchQueue.main.async { [weak self] in self?.paymentActivityRevision += 1 }
+        }
+    }
+
+    private func updatePaymentStatusOnDB(paymentID: String, direction: PaymentDirection, status: PaymentPhase) throws {
+        try DatabaseManager.shared.updatePaymentStatus(paymentID: paymentID, direction: direction, to: status)
+    }
+
+    private func handleIncomingOfflinePayment(payment: OfflinePaymentPayload, env: MeshEnvelope) {
+        // Only the intended recipient stores the payment claim.
+        guard payment.recipientDeviceID == identity.deviceID else { return }
+
+        guard payment.assetSymbol == PaymentAsset.sol.symbol else {
+            log("Offline payment: unsupported assetSymbol \(payment.assetSymbol)")
+            return
+        }
+
+        guard let signatureData = payment.paymentSignatureData(),
+              let publicKeyData = payment.paymentPublicKeyData(),
+              let signingBytes = try? JSONEncoder().encode(payment.signingData()) else { return }
+
+        guard PaymentKeyManager.verifyPaymentPayload(data: signingBytes, signature: signatureData, publicKey: publicKeyData) else {
+            log("Offline payment: signature verification failed for paymentID=\(payment.paymentID)")
+            return
+        }
+
+        let now = Int64(Date().timeIntervalSince1970)
+        // TODO: anti-fraud / reconciliation logic and settlement events will be recorded once on-chain settlement exists.
+        let pending = PendingPayment(
+            id: payment.paymentID,
+            direction: .inbound,
+            senderDeviceID: payment.senderDeviceID,
+            senderName: String(payment.senderName.prefix(32)),
+            recipientDeviceID: payment.recipientDeviceID,
+            recipientName: String(payment.recipientName.prefix(32)),
+            amountLamports: payment.amountLamports,
+            asset: .sol,
+            createdAt: payment.createdAt,
+            receivedAt: now,
+            status: .pending,
+            paymentPayloadVersion: payment.payloadVersion,
+            paymentSignature: signatureData,
+            paymentPublicKey: publicKeyData,
+            memo: payment.memo,
+            meshEnvelopeID: env.id.uuidString,
+            settlementReference: nil,
+            expiresAt: nil, // TODO: set receiver-side expiry based on policy
+            backendReceiptID: nil,
+            transactionSignature: nil,
+            settledAt: nil,
+            failureReason: nil,
+            conflictReason: nil,
+            canonicalSequence: nil,
+            lastSubmissionAttemptAt: nil,
+            attemptCount: nil,
+            nextRetryAt: nil,
+            lastErrorSummary: nil
+        )
+
+        do {
+            let inserted = try DatabaseManager.shared.insertInboundPendingPaymentIfNew(pending)
+            if inserted {
+                DispatchQueue.main.async { [weak self] in self?.paymentActivityRevision += 1 }
+            }
+        } catch {
+            // TODO: surface DB errors in UI for payment troubleshooting
+        }
+    }
+
     func clearDebugLog() {
         DispatchQueue.main.async { [weak self] in
             self?.debugLines = []
@@ -1466,6 +1659,10 @@ final class BluetoothMeshService: NSObject, ObservableObject {
             if let central = sourceCentral {
                 pushMapLabelsToCentral(central)
                 log("Request map labels from central \(central.identifier)")
+            }
+        case .offlinePayment:
+            if let payment = try? JSONDecoder().decode(OfflinePaymentPayload.self, from: env.payload) {
+                handleIncomingOfflinePayment(payment: payment, env: env)
             }
         case .alert:
             if let payload = try? JSONDecoder().decode(AlertPayload.self, from: env.payload) {

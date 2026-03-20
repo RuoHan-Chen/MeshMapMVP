@@ -40,9 +40,16 @@
 		A1000033 /* WiFiMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000033 /* WiFiMonitor.swift */; };
 		A1000034 /* MeshNewsPublish.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000034 /* MeshNewsPublish.swift */; };
 		D974FBAF2F651AD7008F4874 /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = D974FBAE2F651AD7008F4874 /* GRDB */; };
+		D9990001A2F0BEEF00000001 /* SolanaSwift in Frameworks */ = {isa = PBXBuildFile; productRef = D9990000A2F0BEEF00000001 /* SolanaSwift */; };
 		D9DC095B2F65869C000470FF /* AlertFeedView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9DC09592F65869C000470FF /* AlertFeedView.swift */; };
 		D9DC095C2F65869C000470FF /* AlertTrustEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9DC095A2F65869C000470FF /* AlertTrustEngine.swift */; };
 		A1000035 /* SpeechManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000035 /* SpeechManager.swift */; };
+		A1000036 /* PaymentModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000036 /* PaymentModels.swift */; };
+		A1000037 /* OfflinePaymentPayload.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000037 /* OfflinePaymentPayload.swift */; };
+		A1000038 /* WalletAndPaymentServices.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000038 /* WalletAndPaymentServices.swift */; };
+		A1000039 /* WalletTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000039 /* WalletTabView.swift */; };
+		A1000040 /* SettlementAPIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000040 /* SettlementAPIClient.swift */; };
+		A1000041 /* SettlementSyncService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000041 /* SettlementSyncService.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -82,6 +89,12 @@
 		D9DC09592F65869C000470FF /* AlertFeedView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlertFeedView.swift; sourceTree = "<group>"; };
 		D9DC095A2F65869C000470FF /* AlertTrustEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlertTrustEngine.swift; sourceTree = "<group>"; };
 		A2000035 /* SpeechManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeechManager.swift; sourceTree = "<group>"; };
+		A2000036 /* PaymentModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaymentModels.swift; sourceTree = "<group>"; };
+		A2000037 /* OfflinePaymentPayload.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OfflinePaymentPayload.swift; sourceTree = "<group>"; };
+		A2000038 /* WalletAndPaymentServices.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalletAndPaymentServices.swift; sourceTree = "<group>"; };
+		A2000039 /* WalletTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalletTabView.swift; sourceTree = "<group>"; };
+		A2000040 /* SettlementAPIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettlementAPIClient.swift; sourceTree = "<group>"; };
+		A2000041 /* SettlementSyncService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettlementSyncService.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -90,6 +103,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				D974FBAF2F651AD7008F4874 /* GRDB in Frameworks */,
+				D9990001A2F0BEEF00000001 /* SolanaSwift in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -136,6 +150,7 @@
 				A200002B /* ContactsListView.swift */,
 				A200002C /* PrivateChatView.swift */,
 				A200002A /* ContactEditorView.swift */,
+				A2000039 /* WalletTabView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -145,6 +160,7 @@
 			children = (
 				A2000020 /* Contact.swift */,
 				A2000029 /* SavedContact.swift */,
+				A2000036 /* PaymentModels.swift */,
 				A2000009 /* ChatMessage.swift */,
 				A2000021 /* PersistedMessage.swift */,
 				A2000022 /* Alert.swift */,
@@ -163,6 +179,7 @@
 				A2000005 /* MessageType.swift */,
 				A2000007 /* ChatPayload.swift */,
 				A2000008 /* AnnouncementPayload.swift */,
+				A2000037 /* OfflinePaymentPayload.swift */,
 				A2000025 /* AlertPayload.swift */,
 				A2000026 /* VouchPayload.swift */,
 				A2000010 /* ImageChunkPayload.swift */,
@@ -176,6 +193,9 @@
 				A2000003 /* BluetoothMeshService.swift */,
 				A2000027 /* DatabaseManager.swift */,
 				A2000028 /* KeyManager.swift */,
+				A2000038 /* WalletAndPaymentServices.swift */,
+				A2000040 /* SettlementAPIClient.swift */,
+				A2000041 /* SettlementSyncService.swift */,
 				A200002D /* ChatCrypto.swift */,
 				A2000033 /* WiFiMonitor.swift */,
 				A2000034 /* MeshNewsPublish.swift */,
@@ -256,6 +276,7 @@
 			mainGroup = A4000000;
 			packageReferences = (
 				D974FBAD2F651AD7008F4874 /* XCRemoteSwiftPackageReference "GRDB" */,
+				D9990BAD2F651AD7008F4875 /* XCRemoteSwiftPackageReference "SolanaSwift" */,
 			);
 			productRefGroup = A4000002 /* Products */;
 			projectDirPath = "";
@@ -316,6 +337,12 @@
 				A100002A /* ContactEditorView.swift in Sources */,
 				A100002B /* ContactsListView.swift in Sources */,
 				A100002C /* PrivateChatView.swift in Sources */,
+				A1000036 /* PaymentModels.swift in Sources */,
+				A1000037 /* OfflinePaymentPayload.swift in Sources */,
+				A1000038 /* WalletAndPaymentServices.swift in Sources */,
+				A1000039 /* WalletTabView.swift in Sources */,
+				A1000040 /* SettlementAPIClient.swift in Sources */,
+				A1000041 /* SettlementSyncService.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -451,6 +478,14 @@
 				minimumVersion = 6.0.0;
 			};
 		};
+		D9990BAD2F651AD7008F4875 /* XCRemoteSwiftPackageReference "SolanaSwift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/p2p-org/solana-swift";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 5.0.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -458,6 +493,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = D974FBAD2F651AD7008F4874 /* XCRemoteSwiftPackageReference "GRDB" */;
 			productName = GRDB;
+		};
+		D9990000A2F0BEEF00000001 /* SolanaSwift */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = D9990BAD2F651AD7008F4875 /* XCRemoteSwiftPackageReference "SolanaSwift" */;
+			productName = SolanaSwift;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

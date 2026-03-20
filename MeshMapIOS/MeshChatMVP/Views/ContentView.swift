@@ -37,6 +37,10 @@ struct ContentView: View {
                 .tabItem { Label("Contacts", systemImage: "person.2") }
                 .tag(3)
 
+            WalletTabView()
+                .tabItem { Label("Wallet", systemImage: "wallet.pass") }
+                .tag(5)
+
             ProfileView(mapRegion: $mapRegion, isCachingMap: $isCachingMap)
                 .tabItem { Label("Account", systemImage: "person.circle") }
                 .tag(4)
